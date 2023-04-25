@@ -183,7 +183,10 @@ export class Memoirist<T> {
     }
 
     find(method: string, url: string): FindResult<T> | null {
-        return matchRoute(url, url.length, this.root[method], 0)
+        const root = this.root[method]
+        if (!root) return null
+
+        return matchRoute(url, url.length, root, 0)
     }
 }
 
@@ -193,19 +196,19 @@ const matchRoute = <T>(
     node: Node<T>,
     startIndex: number
 ): FindResult<T> | null => {
-    const pathPart = node.part
-    const endIndex = startIndex + pathPart.length
+    const part = node?.part
+    const endIndex = startIndex + part.length
 
     // Only check the pathPart if its length is > 1 since the parent has
     // already checked that the url matches the first character
-    if (pathPart.length > 1) {
+    if (part.length > 1) {
         if (endIndex > urlLength) return null
 
-        if (pathPart.length < 15) {
+        if (part.length < 15) {
             // Using a loop is faster for short strings
-            for (let i = 1, j = startIndex + 1; i < pathPart.length; ++i, ++j)
-                if (pathPart[i] !== url[j]) return null
-        } else if (url.slice(startIndex, endIndex) !== pathPart) return null
+            for (let i = 1, j = startIndex + 1; i < part.length; ++i, ++j)
+                if (part[i] !== url[j]) return null
+        } else if (url.slice(startIndex, endIndex) !== part) return null
     }
 
     if (endIndex === urlLength) {

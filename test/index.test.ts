@@ -246,4 +246,13 @@ describe('Raikiri', () => {
         )
         expect(router.find('GET', '/api/awd/type')).toBe(null)
     })
+
+    it('not error on not found', () => {
+        const router = new Memoirist()
+
+        router.add('GET', '/api/abc/:type', '/api/abc/:type')
+
+        expect(router.find('GET', '/api')).toBe(null)
+        expect(router.find('POST', '/api/awd/type')).toBe(null)
+    })
 })
