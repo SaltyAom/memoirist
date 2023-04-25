@@ -41,6 +41,7 @@ const createParamNode = <T>(paramName: string): ParamNode<T> => ({
 
 export class Memoirist<T> {
     root: Record<string, Node<T>> = {}
+    history: [string, string, T][] = []
 
     private static regex = {
         static: /:.+?(?=\/|$)/,
@@ -53,6 +54,8 @@ export class Memoirist<T> {
 
         if (path === '') path = '/'
         else if (path[0] !== '/') path = `/${path}`
+
+        this.history.push([method, path, store])
 
         const isWildcard = path[path.length - 1] === '*'
         if (isWildcard) {
