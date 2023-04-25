@@ -15,15 +15,15 @@
     "types": "./src/index.ts",
     "keywords": [
         "elysia",
-        "raikiri",
+        "memoirist",
         "router"
     ],
-    "homepage": "https://github.com/saltyaom/raikiri",
+    "homepage": "https://github.com/saltyaom/memoirist",
     "repository": {
         "type": "git",
-        "url": "https://github.com/saltyaom/raikiri"
+        "url": "https://github.com/saltyaom/memoirist"
     },
-    "bugs": "https://github.com/saltyaom/raikiri/issues",
+    "bugs": "https://github.com/saltyaom/memoirist/issues",
     "license": "MIT",
     "scripts": {
         "dev": "bun run --hot example/index.ts",
