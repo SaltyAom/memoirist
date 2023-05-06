@@ -207,8 +207,8 @@ const matchRoute = <T>(
         if (part.length < 15) {
             // Using a loop is faster for short strings
             for (let i = 1, j = startIndex + 1; i < part.length; ++i, ++j)
-                if (part[i] !== url[j]) return null
-        } else if (url.slice(startIndex, endIndex) !== part) return null
+                if (part.charCodeAt(i) !== url.charCodeAt(j)) return null
+        } else if (url.substring(startIndex, endIndex) !== part) return null
     }
 
     if (endIndex === urlLength) {
@@ -249,7 +249,7 @@ const matchRoute = <T>(
                     // This is much faster than using a computed property
                     const params: Record<string, string> = {}
 
-                    params[param.paramName] = url.slice(endIndex, urlLength)
+                    params[param.paramName] = url.substring(endIndex, urlLength)
 
                     return {
                         store: param.store,
@@ -265,7 +265,7 @@ const matchRoute = <T>(
                 )
 
                 if (route !== null) {
-                    route.params[param.paramName] = url.slice(
+                    route.params[param.paramName] = url.substring(
                         endIndex,
                         slashIndex
                     )
@@ -280,7 +280,7 @@ const matchRoute = <T>(
         return {
             store: node.wildcardStore,
             params: {
-                '*': url.slice(endIndex, urlLength)
+                '*': url.substring(endIndex, urlLength)
             }
         }
 

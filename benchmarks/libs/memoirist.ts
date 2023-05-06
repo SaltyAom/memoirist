@@ -64,6 +64,12 @@ for (i = 0; i < operations; i++) {
 }
 print('wildcard:', time)
 
+time = now()
+for (i = 0; i < operations; i++) {
+    router.find('GET', '/not-found')
+}
+print('not found:', time)
+
 // Uncomment this if correction is need 😭😭💢💢💢
 // console.log(router.find('GET', '/user'))
 // console.log(router.find('GET', '/user/comments'))
