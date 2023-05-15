@@ -1,3 +1,7 @@
+# 0.1.4 - 15 May 2023
+fix:
+- add commonjs support
+
 # 0.1.3 - 6 May 2023
 feat:
 - using charCodeAt

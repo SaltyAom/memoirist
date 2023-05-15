@@ -1,6 +1,6 @@
 {
     "name": "memoirist",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "description": "Elysia's Radix Tree router for fast matching dynamic parameters",
     "author": {
         "name": "saltyAom",
@@ -30,7 +30,7 @@
         "test": "bun wiptest",
         "build": "rimraf dist && pnpm build:esm && pnpm build:cjs",
         "build:cjs": "swc src --config-file .cjs.swcrc -d dist/cjs && tsc --project tsconfig.esm.json",
-        "build:esm": "swc src -d dist && tsc --project tsconfig.esm.json",
+        "build:esm": "swc src --config-file .esm.swcrc -d dist && tsc --project tsconfig.esm.json",
         "benchmark": "bun benchmarks/index.ts",
         "benchmark:memoirist": "bun benchmarks/libs/memoirist.ts",
         "release": "npm run build && npm run test && npm publish --access public"
