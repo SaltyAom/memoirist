@@ -31,7 +31,7 @@
     "license": "MIT",
     "scripts": {
         "dev": "bun run --hot example/index.ts",
-        "test": "bun wiptest",
+        "test": "bun test",
         "build": "rimraf dist && pnpm build:esm && pnpm build:cjs",
         "build:cjs": "swc src --config-file .cjs.swcrc -d dist/cjs && tsc --project tsconfig.esm.json",
         "build:esm": "swc src --config-file .esm.swcrc -d dist && tsc --project tsconfig.esm.json",
