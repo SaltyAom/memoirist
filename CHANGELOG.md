@@ -1,3 +1,7 @@
+# 0.1.5 - 15 May 2023
+fix:
+- add exports field support
+
 # 0.1.4 - 15 May 2023
 fix:
 - add commonjs support

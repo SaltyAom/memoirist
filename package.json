@@ -1,18 +1,22 @@
 {
     "name": "memoirist",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "description": "Elysia's Radix Tree router for fast matching dynamic parameters",
     "author": {
         "name": "saltyAom",
         "url": "https://github.com/SaltyAom",
         "email": "saltyaom@gmail.com"
     },
-    "main": "./dist/index.js",
     "exports": {
-        "require": "./dist/cjs/index.js",
-        "import": "./dist/index.js"
+        ".": {
+            "bun": "./dist/index.js",
+            "require": "./dist/cjs/index.js",
+            "import": "./dist/index.js",
+            "types": "./src/index.ts",
+            "node": "./dist/index.js",
+            "default": "./dist/index.js"
+        }
     },
-    "types": "./src/index.ts",
     "keywords": [
         "elysia",
         "memoirist",
