@@ -1,7 +1,6 @@
 import { Memoirist } from '../src'
 
 import { describe, expect, it } from 'bun:test'
-import { execPath } from 'process'
 
 const router = new Memoirist()
 router.add('GET', '/abc', '/abc')
@@ -18,7 +17,7 @@ router.add('GET', '/dynamic/:name/then/static', '/dynamic/:name/then/static')
 router.add('GET', '/deep/nested/route', '/deep/nested/route')
 router.add('GET', '/rest/*', '/rest/*')
 
-describe('Raikiri', () => {
+describe('Memoirist', () => {
     it('match root', () => {
         expect(router.find('GET', '/')).toEqual({
             store: '/',
@@ -254,5 +253,83 @@ describe('Raikiri', () => {
 
         expect(router.find('GET', '/api')).toBe(null)
         expect(router.find('POST', '/api/awd/type')).toBe(null)
+    })
+
+    it('optional path', () => {
+        const router = new Memoirist()
+
+        router.add('GET', '/api/:a?', '/api/a?')
+
+        expect(router.find('GET', '/api')?.store).toBe('/api/a?')
+        expect(router.find('GET', '/api/abc')?.store).toBe('/api/a?')
+    })
+
+    it('optional path in the middle', () => {
+        const router = new Memoirist()
+
+        router.add('GET', '/api/:a?/name', '/api/a?/name')
+
+        expect(router.find('GET', '/api')?.store).toBeUndefined()
+        expect(router.find('GET', '/api/name')?.store).toBe('/api/a?/name')
+        expect(router.find('GET', '/api/a/name')?.store).toBe('/api/a?/name')
+    })
+
+    it('optional path at start', () => {
+        const router = new Memoirist()
+
+        router.add('GET', '/:a?/name', '/a?/name')
+
+        expect(router.find('GET', '/a')?.store).toBeUndefined()
+        expect(router.find('GET', '/name')?.store).toBe('/a?/name')
+        expect(router.find('GET', '/a/name')?.store).toBe('/a?/name')
+    })
+
+    it('optional paths 3 level', () => {
+        const router = new Memoirist()
+
+        router.add(
+            'GET',
+            '/api/search/:term?/name/:name?/age/:age?',
+            '/api/search/:term?/name/:name?/age/:age?'
+        )
+
+        const routes = [
+            '/api/search/name/age',
+            '/api/search/name/age/:age',
+            '/api/search/name/:name/age',
+            '/api/search/name/:name/age/:age',
+            '/api/search/:term/name/age',
+            '/api/search/:term/name/age/:age',
+            '/api/search/:term/name/:name/age',
+            '/api/search/:term/name/:name/age/:age'
+        ]
+
+        routes.forEach((route) => {
+            expect(router.find('GET', route)?.store).toBe(
+                '/api/search/:term?/name/:name?/age/:age?'
+            )
+        })
+    })
+
+    it('optional chained optional params', () => {
+        const router = new Memoirist()
+
+        router.add(
+            'GET',
+            '/api/search/:term?/:name?/:age?',
+            '/api/search/:term?/:name?/:age?'
+        )
+        
+        const routes = [
+            '/api/search/term/name/age',
+            '/api/search/term/name',
+            '/api/search/term'
+        ]
+
+        routes.forEach((route) => {
+            expect(router.find('GET', route)?.store).toBe(
+                '/api/search/:term?/:name?/:age?'
+            )
+        })
     })
 })

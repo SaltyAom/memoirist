@@ -8,7 +8,7 @@ router.add('GET', '/v1/genres/:id', '/g/:id')
 router.add('GET', '/v1/statuse', '/s')
 router.add('GET', '/v1/statuse/:id', '/s/:id')
 
-describe('Add', () => {
+describe('Memoirist', () => {
     it('Clean up path mangling', () => {
         expect(router.find('GET', '/v1/statuse/1')).toEqual({
             store: '/s/:id',

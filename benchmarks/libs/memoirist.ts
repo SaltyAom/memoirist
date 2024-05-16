@@ -1,7 +1,7 @@
 import { title, now, print, operations } from '../utils'
-import Rikiri from '../../src'
+import Memoirist from '../../src'
 
-const router = new Rikiri()
+const router = new Memoirist()
 
 title('Memoirist benchmark')
 

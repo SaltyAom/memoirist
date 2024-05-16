@@ -1,3 +1,10 @@
+# 0.2.0 - 17 May 2024
+feature:
+- optional param
+
+change:
+- change inert structure from Map to Record
+
 # 0.1.5 - 15 May 2023
 fix:
 - add exports field support

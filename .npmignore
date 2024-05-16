@@ -22,3 +22,4 @@ tests
 test
 CHANGELOG.md
 benchmarks
+build.ts

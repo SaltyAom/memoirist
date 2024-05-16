@@ -4,7 +4,7 @@ export interface FindResult<T> {
 }
 
 export interface ParamNode<T> {
-    paramName: string
+    name: string
     store: T | null
     inert: Node<T> | null
 }
@@ -12,29 +12,33 @@ export interface ParamNode<T> {
 export interface Node<T> {
     part: string
     store: T | null
-    inert: Map<number, Node<T>> | null
+    inert: Record<number, Node<T>> | null
     params: ParamNode<T> | null
     wildcardStore: T | null
 }
 
-const createNode = <T>(part: string, inert?: Node<T>[]): Node<T> => ({
-    part,
-    store: null,
-    inert:
-        inert !== undefined
-            ? new Map(inert.map((child) => [child.part.charCodeAt(0), child]))
-            : null,
-    params: null,
-    wildcardStore: null
-})
+const createNode = <T>(part: string, inert?: Node<T>[]): Node<T> => {
+    const inertMap: Record<number, Node<T>> | null = inert?.length ? {} : null
+
+    if (inertMap)
+        for (const child of inert!) inertMap[child.part.charCodeAt(0)] = child
+
+    return {
+        part,
+        store: null,
+        inert: inertMap,
+        params: null,
+        wildcardStore: null
+    }
+}
 
 const cloneNode = <T>(node: Node<T>, part: string) => ({
     ...node,
     part
 })
 
-const createParamNode = <T>(paramName: string): ParamNode<T> => ({
-    paramName,
+const createParamNode = <T>(name: string): ParamNode<T> => ({
+    name,
     store: null,
     inert: null
 })
@@ -45,23 +49,59 @@ export class Memoirist<T> {
 
     private static regex = {
         static: /:.+?(?=\/|$)/,
-        params: /:.+?(?=\/|$)/g
+        params: /:.+?(?=\/|$)/g,
+        optionalParams: /:.+?\?(?=\/|$)/g
     }
 
-    add(method: string, path: string, store: T): FindResult<T>['store'] {
+    add(
+        method: string,
+        path: string,
+        store: T,
+        {
+            ignoreError = false,
+            ignoreHistory = false
+        }: { ignoreError?: boolean; ignoreHistory?: boolean } = {}
+    ): FindResult<T>['store'] {
         if (typeof path !== 'string')
             throw new TypeError('Route path must be a string')
 
         if (path === '') path = '/'
         else if (path[0] !== '/') path = `/${path}`
 
-        this.history.push([method, path, store])
-
         const isWildcard = path[path.length - 1] === '*'
-        if (isWildcard) {
+        // End with ? and is param
+        const optionalParams = path.match(Memoirist.regex.optionalParams)
+
+        if (optionalParams) {
+            const originalPath = path.replaceAll('?', '')
+            this.add(method, originalPath, store, {
+                ignoreError
+            })
+
+            for (let i = 0; i < optionalParams.length; i++) {
+                let newPath = path.replace('/' + optionalParams[i], '')
+
+                this.add(method, newPath, store, {
+                    ignoreError: true
+                })
+            }
+
+            return store
+        }
+
+        if (optionalParams) path = path.replaceAll('?', '')
+
+        if (this.history.find(([m, p, s]) => m === method && p === path))
+            return store
+
+        if (
+            isWildcard ||
+            (optionalParams && path.charCodeAt(path.length - 1) === 63)
+        )
             // Slice off trailing '*'
             path = path.slice(0, -1)
-        }
+
+        if (!ignoreHistory) this.history.push([method, path, store])
 
         const inertParts = path.split(Memoirist.regex.static)
         const paramParts = path.match(Memoirist.regex.params) || []
@@ -83,12 +123,15 @@ export class Memoirist<T> {
                 const param = paramParts[paramPartsIndex++].slice(1)
 
                 if (node.params === null) node.params = createParamNode(param)
-                else if (node.params.paramName !== param)
-                    throw new Error(
-                        `Cannot create route "${path}" with parameter "${param}" ` +
-                            'because a route already exists with a different parameter name ' +
-                            `("${node.params.paramName}") in the same location`
-                    )
+                else if (node.params.name !== param) {
+                    if (ignoreError) return store
+                    else
+                        throw new Error(
+                            `Cannot create route "${path}" with parameter "${param}" ` +
+                                'because a route already exists with a different parameter name ' +
+                                `("${node.params.name}") in the same location`
+                        )
+                }
 
                 const params = node.params
 
@@ -112,10 +155,13 @@ export class Memoirist<T> {
 
                 if (j === node.part.length) {
                     // Add static child
-                    if (node.inert === null) node.inert = new Map()
-                    else if (node.inert.has(part.charCodeAt(j))) {
+                    if (node.inert === null) node.inert = {}
+
+                    const inert = node.inert[part.charCodeAt(j)]
+
+                    if (inert) {
                         // Re-run loop with existing static node
-                        node = node.inert.get(part.charCodeAt(j))!
+                        node = inert
                         part = part.slice(j)
                         j = 0
                         continue
@@ -123,7 +169,7 @@ export class Memoirist<T> {
 
                     // Create new node
                     const childNode = createNode<T>(part.slice(j))
-                    node.inert.set(part.charCodeAt(j), childNode)
+                    node.inert[part.charCodeAt(j)] = childNode
                     node = childNode
 
                     break
@@ -154,15 +200,18 @@ export class Memoirist<T> {
         if (paramPartsIndex < paramParts.length) {
             // The final part is a parameter
             const param = paramParts[paramPartsIndex]
-            const paramName = param.slice(1)
+            const name = param.slice(1)
 
-            if (node.params === null) node.params = createParamNode(paramName)
-            else if (node.params.paramName !== paramName)
-                throw new Error(
-                    `Cannot create route "${path}" with parameter "${paramName}" ` +
-                        'because a route already exists with a different parameter name ' +
-                        `("${node.params.paramName}") in the same location`
-                )
+            if (node.params === null) node.params = createParamNode(name)
+            else if (node.params.name !== name) {
+                if (ignoreError) return store
+                else
+                    throw new Error(
+                        `Cannot create route "${path}" with parameter "${name}" ` +
+                            'because a route already exists with a different parameter name ' +
+                            `("${node.params.name}") in the same location`
+                    )
+            }
 
             if (node.params.store === null) node.params.store = store
 
@@ -196,23 +245,24 @@ const matchRoute = <T>(
     node: Node<T>,
     startIndex: number
 ): FindResult<T> | null => {
-    const part = node?.part
-    const endIndex = startIndex + part.length
+    const part = node.part
+    const length = part.length
+    const endIndex = startIndex + length
 
     // Only check the pathPart if its length is > 1 since the parent has
     // already checked that the url matches the first character
-    if (part.length > 1) {
+    if (length > 1) {
         if (endIndex > urlLength) return null
 
-        if (part.length < 15) {
-            // Using a loop is faster for short strings
-            for (let i = 1, j = startIndex + 1; i < part.length; ++i, ++j)
+        // Using a loop is faster for short strings
+        if (length < 15) {
+            for (let i = 1, j = startIndex + 1; i < length; ++i, ++j)
                 if (part.charCodeAt(i) !== url.charCodeAt(j)) return null
-        } else if (url.substring(startIndex, endIndex) !== part) return null
+        } else if (url.slice(startIndex, endIndex) !== part) return null
     }
 
+    // Reached the end of the URL
     if (endIndex === urlLength) {
-        // Reached the end of the URL
         if (node.store !== null)
             return {
                 store: node.store,
@@ -228,8 +278,9 @@ const matchRoute = <T>(
         return null
     }
 
+    // Check for a static leaf
     if (node.inert !== null) {
-        const inert = node.inert.get(url.charCodeAt(endIndex))
+        const inert = node.inert[url.charCodeAt(endIndex)]
 
         if (inert !== undefined) {
             const route = matchRoute(url, urlLength, inert, endIndex)
@@ -238,37 +289,29 @@ const matchRoute = <T>(
         }
     }
 
+    // Check for dynamic leaf
     if (node.params !== null) {
-        const param = node.params
+        const { store, name, inert } = node.params
         const slashIndex = url.indexOf('/', endIndex)
 
         if (slashIndex !== endIndex) {
             // Params cannot be empty
             if (slashIndex === -1 || slashIndex >= urlLength) {
-                if (param.store !== null) {
+                if (store !== null) {
                     // This is much faster than using a computed property
                     const params: Record<string, string> = {}
-
-                    params[param.paramName] = url.substring(endIndex, urlLength)
+                    params[name] = url.substring(endIndex, urlLength)
 
                     return {
-                        store: param.store,
+                        store,
                         params
                     }
                 }
-            } else if (param.inert !== null) {
-                const route = matchRoute(
-                    url,
-                    urlLength,
-                    param.inert,
-                    slashIndex
-                )
+            } else if (inert !== null) {
+                const route = matchRoute(url, urlLength, inert, slashIndex)
 
                 if (route !== null) {
-                    route.params[param.paramName] = url.substring(
-                        endIndex,
-                        slashIndex
-                    )
+                    route.params[name] = url.substring(endIndex, slashIndex)
 
                     return route
                 }
@@ -276,6 +319,7 @@ const matchRoute = <T>(
         }
     }
 
+    // Check for wildcard leaf
     if (node.wildcardStore !== null)
         return {
             store: node.wildcardStore,
