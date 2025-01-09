@@ -1,3 +1,7 @@
+# 0.3.0 - 9 Jan 2024
+feature:
+- lazy evaluation
+
 # 0.2.0 - 17 May 2024
 feature:
 - optional param

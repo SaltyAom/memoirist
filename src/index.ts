@@ -1,334 +1,395 @@
 export interface FindResult<T> {
-    store: T
-    params: Record<string, any>
+	store: T
+	params: Record<string, any>
 }
 
 export interface ParamNode<T> {
-    name: string
-    store: T | null
-    inert: Node<T> | null
+	name: string
+	store: T | null
+	inert: Node<T> | null
 }
 
 export interface Node<T> {
-    part: string
-    store: T | null
-    inert: Record<number, Node<T>> | null
-    params: ParamNode<T> | null
-    wildcardStore: T | null
+	part: string
+	store: T | null
+	inert: Record<number, Node<T>> | null
+	params: ParamNode<T> | null
+	wildcardStore: T | null
 }
 
 const createNode = <T>(part: string, inert?: Node<T>[]): Node<T> => {
-    const inertMap: Record<number, Node<T>> | null = inert?.length ? {} : null
+	const inertMap: Record<number, Node<T>> | null = inert?.length ? {} : null
 
-    if (inertMap)
-        for (const child of inert!) inertMap[child.part.charCodeAt(0)] = child
+	if (inertMap)
+		for (const child of inert!) inertMap[child.part.charCodeAt(0)] = child
 
-    return {
-        part,
-        store: null,
-        inert: inertMap,
-        params: null,
-        wildcardStore: null
-    }
+	return {
+		part,
+		store: null,
+		inert: inertMap,
+		params: null,
+		wildcardStore: null
+	}
 }
 
 const cloneNode = <T>(node: Node<T>, part: string) => ({
-    ...node,
-    part
+	...node,
+	part
 })
 
 const createParamNode = <T>(name: string): ParamNode<T> => ({
-    name,
-    store: null,
-    inert: null
+	name,
+	store: null,
+	inert: null
 })
 
+export interface Config {
+	/**
+	 * lazily create nodes
+	 *
+	 * @default undefined
+	 * @since 0.3.0
+	 */
+	lazy?: boolean
+}
+
 export class Memoirist<T> {
-    root: Record<string, Node<T>> = {}
-    history: [string, string, T][] = []
+	root: Record<string, Node<T>> = {}
+	history: [string, string, T][] = []
+	deferred: [string, string, T][] = []
 
-    private static regex = {
-        static: /:.+?(?=\/|$)/,
-        params: /:.+?(?=\/|$)/g,
-        optionalParams: /:.+?\?(?=\/|$)/g
-    }
+	constructor(public config: Config = {}) {
+		if (config.lazy)
+			// @ts-expect-error
+			this.find = this.lazyFind
+	}
 
-    add(
-        method: string,
-        path: string,
-        store: T,
-        {
-            ignoreError = false,
-            ignoreHistory = false
-        }: { ignoreError?: boolean; ignoreHistory?: boolean } = {}
-    ): FindResult<T>['store'] {
-        if (typeof path !== 'string')
-            throw new TypeError('Route path must be a string')
+	private static regex = {
+		static: /:.+?(?=\/|$)/,
+		params: /:.+?(?=\/|$)/g,
+		optionalParams: /:.+?\?(?=\/|$)/g
+	}
 
-        if (path === '') path = '/'
-        else if (path[0] !== '/') path = `/${path}`
+	private lazyFind = (method: string, url: string) => {
+		if (!this.config.lazy) return this.find
 
-        const isWildcard = path[path.length - 1] === '*'
-        // End with ? and is param
-        const optionalParams = path.match(Memoirist.regex.optionalParams)
+		this.build()
 
-        if (optionalParams) {
-            const originalPath = path.replaceAll('?', '')
-            this.add(method, originalPath, store, {
-                ignoreError
-            })
+		return this.find(method, url)
+	}
 
-            for (let i = 0; i < optionalParams.length; i++) {
-                let newPath = path.replace('/' + optionalParams[i], '')
+	build() {
+		if (!this.config.lazy) return
 
-                this.add(method, newPath, store, {
-                    ignoreError: true
-                })
-            }
+		for (const [method, path, store] of this.deferred)
+			this.add(method, path, store, { lazy: false, ignoreHistory: true })
 
-            return store
-        }
+		this.deferred = []
 
-        if (optionalParams) path = path.replaceAll('?', '')
+		this.find = (
+			method: string,
+			url: string
+			): FindResult<T> | null => {
+			const root = this.root[method]
+			if (!root) return null
 
-        if (this.history.find(([m, p, s]) => m === method && p === path))
-            return store
+			return matchRoute(url, url.length, root, 0)
+		}
+	}
 
-        if (
-            isWildcard ||
-            (optionalParams && path.charCodeAt(path.length - 1) === 63)
-        )
-            // Slice off trailing '*'
-            path = path.slice(0, -1)
+	add(
+		method: string,
+		path: string,
+		store: T,
+		{
+			ignoreError = false,
+			ignoreHistory = false,
+			lazy = this.config.lazy
+		}: {
+			ignoreError?: boolean
+			ignoreHistory?: boolean
+			lazy?: boolean
+		} = {}
+	): FindResult<T>['store'] {
+		if (lazy) {
+			// @ts-expect-error
+			this.find = this.lazyFind
+			this.deferred.push([method, path, store])
 
-        if (!ignoreHistory) this.history.push([method, path, store])
+			return store
+		}
 
-        const inertParts = path.split(Memoirist.regex.static)
-        const paramParts = path.match(Memoirist.regex.params) || []
+		if (typeof path !== 'string')
+			throw new TypeError('Route path must be a string')
 
-        if (inertParts[inertParts.length - 1] === '') inertParts.pop()
+		if (path === '') path = '/'
+		else if (path[0] !== '/') path = `/${path}`
 
-        let node: Node<T>
+		const isWildcard = path[path.length - 1] === '*'
+		// End with ? and is param
+		const optionalParams = path.match(Memoirist.regex.optionalParams)
 
-        if (!this.root[method]) node = this.root[method] = createNode<T>('/')
-        else node = this.root[method]
+		if (optionalParams) {
+			const originalPath = path.replaceAll('?', '')
+			this.add(method, originalPath, store, {
+				ignoreError,
+				ignoreHistory,
+				lazy
+			})
 
-        let paramPartsIndex = 0
+			for (let i = 0; i < optionalParams.length; i++) {
+				let newPath = path.replace('/' + optionalParams[i], '')
 
-        for (let i = 0; i < inertParts.length; ++i) {
-            let part = inertParts[i]
+				this.add(method, newPath, store, {
+					ignoreError: true,
+					ignoreHistory,
+					lazy
+				})
+			}
 
-            if (i > 0) {
-                // Set param on the node
-                const param = paramParts[paramPartsIndex++].slice(1)
+			return store
+		}
 
-                if (node.params === null) node.params = createParamNode(param)
-                else if (node.params.name !== param) {
-                    if (ignoreError) return store
-                    else
-                        throw new Error(
-                            `Cannot create route "${path}" with parameter "${param}" ` +
-                                'because a route already exists with a different parameter name ' +
-                                `("${node.params.name}") in the same location`
-                        )
-                }
+		if (optionalParams) path = path.replaceAll('?', '')
 
-                const params = node.params
+		if (this.history.find(([m, p, s]) => m === method && p === path))
+			return store
 
-                if (params.inert === null) {
-                    node = params.inert = createNode(part)
-                    continue
-                }
+		if (
+			isWildcard ||
+			(optionalParams && path.charCodeAt(path.length - 1) === 63)
+		)
+			// Slice off trailing '*'
+			path = path.slice(0, -1)
 
-                node = params.inert
-            }
+		if (!ignoreHistory) this.history.push([method, path, store])
 
-            for (let j = 0; ; ) {
-                if (j === part.length) {
-                    if (j < node.part.length) {
-                        // Move the current node down
-                        const childNode = cloneNode(node, node.part.slice(j))
-                        Object.assign(node, createNode(part, [childNode]))
-                    }
-                    break
-                }
+		const inertParts = path.split(Memoirist.regex.static)
+		const paramParts = path.match(Memoirist.regex.params) || []
 
-                if (j === node.part.length) {
-                    // Add static child
-                    if (node.inert === null) node.inert = {}
+		if (inertParts[inertParts.length - 1] === '') inertParts.pop()
 
-                    const inert = node.inert[part.charCodeAt(j)]
+		let node: Node<T>
 
-                    if (inert) {
-                        // Re-run loop with existing static node
-                        node = inert
-                        part = part.slice(j)
-                        j = 0
-                        continue
-                    }
+		if (!this.root[method]) node = this.root[method] = createNode<T>('/')
+		else node = this.root[method]
 
-                    // Create new node
-                    const childNode = createNode<T>(part.slice(j))
-                    node.inert[part.charCodeAt(j)] = childNode
-                    node = childNode
+		let paramPartsIndex = 0
 
-                    break
-                }
+		for (let i = 0; i < inertParts.length; ++i) {
+			let part = inertParts[i]
 
-                if (part[j] !== node.part[j]) {
-                    // Split the node
-                    const existingChild = cloneNode(node, node.part.slice(j))
-                    const newChild = createNode<T>(part.slice(j))
+			if (i > 0) {
+				// Set param on the node
+				const param = paramParts[paramPartsIndex++].slice(1)
 
-                    Object.assign(
-                        node,
-                        createNode(node.part.slice(0, j), [
-                            existingChild,
-                            newChild
-                        ])
-                    )
+				if (node.params === null) node.params = createParamNode(param)
+				else if (node.params.name !== param) {
+					if (ignoreError) return store
+					else
+						throw new Error(
+							`Cannot create route "${path}" with parameter "${param}" ` +
+								'because a route already exists with a different parameter name ' +
+								`("${node.params.name}") in the same location`
+						)
+				}
 
-                    node = newChild
+				const params = node.params
 
-                    break
-                }
+				if (params.inert === null) {
+					node = params.inert = createNode(part)
+					continue
+				}
 
-                ++j
-            }
-        }
+				node = params.inert
+			}
 
-        if (paramPartsIndex < paramParts.length) {
-            // The final part is a parameter
-            const param = paramParts[paramPartsIndex]
-            const name = param.slice(1)
+			for (let j = 0; ; ) {
+				if (j === part.length) {
+					if (j < node.part.length) {
+						// Move the current node down
+						const childNode = cloneNode(node, node.part.slice(j))
+						Object.assign(node, createNode(part, [childNode]))
+					}
+					break
+				}
 
-            if (node.params === null) node.params = createParamNode(name)
-            else if (node.params.name !== name) {
-                if (ignoreError) return store
-                else
-                    throw new Error(
-                        `Cannot create route "${path}" with parameter "${name}" ` +
-                            'because a route already exists with a different parameter name ' +
-                            `("${node.params.name}") in the same location`
-                    )
-            }
+				if (j === node.part.length) {
+					// Add static child
+					if (node.inert === null) node.inert = {}
 
-            if (node.params.store === null) node.params.store = store
+					const inert = node.inert[part.charCodeAt(j)]
 
-            return node.params.store!
-        }
+					if (inert) {
+						// Re-run loop with existing static node
+						node = inert
+						part = part.slice(j)
+						j = 0
+						continue
+					}
 
-        if (isWildcard) {
-            // The final part is a wildcard
-            if (node.wildcardStore === null) node.wildcardStore = store
+					// Create new node
+					const childNode = createNode<T>(part.slice(j))
+					node.inert[part.charCodeAt(j)] = childNode
+					node = childNode
 
-            return node.wildcardStore!
-        }
+					break
+				}
 
-        // The final part is static
-        if (node.store === null) node.store = store
+				if (part[j] !== node.part[j]) {
+					// Split the node
+					const existingChild = cloneNode(node, node.part.slice(j))
+					const newChild = createNode<T>(part.slice(j))
 
-        return node.store!
-    }
+					Object.assign(
+						node,
+						createNode(node.part.slice(0, j), [
+							existingChild,
+							newChild
+						])
+					)
 
-    find(method: string, url: string): FindResult<T> | null {
-        const root = this.root[method]
-        if (!root) return null
+					node = newChild
 
-        return matchRoute(url, url.length, root, 0)
-    }
+					break
+				}
+
+				++j
+			}
+		}
+
+		if (paramPartsIndex < paramParts.length) {
+			// The final part is a parameter
+			const param = paramParts[paramPartsIndex]
+			const name = param.slice(1)
+
+			if (node.params === null) node.params = createParamNode(name)
+			else if (node.params.name !== name) {
+				if (ignoreError) return store
+				else
+					throw new Error(
+						`Cannot create route "${path}" with parameter "${name}" ` +
+							'because a route already exists with a different parameter name ' +
+							`("${node.params.name}") in the same location`
+					)
+			}
+
+			if (node.params.store === null) node.params.store = store
+
+			return node.params.store!
+		}
+
+		if (isWildcard) {
+			// The final part is a wildcard
+			if (node.wildcardStore === null) node.wildcardStore = store
+
+			return node.wildcardStore!
+		}
+
+		// The final part is static
+		if (node.store === null) node.store = store
+
+		return node.store!
+	}
+
+	find(method: string, url: string): FindResult<T> | null {
+		const root = this.root[method]
+		if (!root) return null
+
+		return matchRoute(url, url.length, root, 0)
+	}
 }
 
 const matchRoute = <T>(
-    url: string,
-    urlLength: number,
-    node: Node<T>,
-    startIndex: number
+	url: string,
+	urlLength: number,
+	node: Node<T>,
+	startIndex: number
 ): FindResult<T> | null => {
-    const part = node.part
-    const length = part.length
-    const endIndex = startIndex + length
+	const part = node.part
+	const length = part.length
+	const endIndex = startIndex + length
 
-    // Only check the pathPart if its length is > 1 since the parent has
-    // already checked that the url matches the first character
-    if (length > 1) {
-        if (endIndex > urlLength) return null
+	// Only check the pathPart if its length is > 1 since the parent has
+	// already checked that the url matches the first character
+	if (length > 1) {
+		if (endIndex > urlLength) return null
 
-        // Using a loop is faster for short strings
-        if (length < 15) {
-            for (let i = 1, j = startIndex + 1; i < length; ++i, ++j)
-                if (part.charCodeAt(i) !== url.charCodeAt(j)) return null
-        } else if (url.slice(startIndex, endIndex) !== part) return null
-    }
+		// Using a loop is faster for short strings
+		if (length < 15) {
+			for (let i = 1, j = startIndex + 1; i < length; ++i, ++j)
+				if (part.charCodeAt(i) !== url.charCodeAt(j)) return null
+		} else if (url.slice(startIndex, endIndex) !== part) return null
+	}
 
-    // Reached the end of the URL
-    if (endIndex === urlLength) {
-        if (node.store !== null)
-            return {
-                store: node.store,
-                params: {}
-            }
+	// Reached the end of the URL
+	if (endIndex === urlLength) {
+		if (node.store !== null)
+			return {
+				store: node.store,
+				params: {}
+			}
 
-        if (node.wildcardStore !== null)
-            return {
-                store: node.wildcardStore,
-                params: { '*': '' }
-            }
+		if (node.wildcardStore !== null)
+			return {
+				store: node.wildcardStore,
+				params: { '*': '' }
+			}
 
-        return null
-    }
+		return null
+	}
 
-    // Check for a static leaf
-    if (node.inert !== null) {
-        const inert = node.inert[url.charCodeAt(endIndex)]
+	// Check for a static leaf
+	if (node.inert !== null) {
+		const inert = node.inert[url.charCodeAt(endIndex)]
 
-        if (inert !== undefined) {
-            const route = matchRoute(url, urlLength, inert, endIndex)
+		if (inert !== undefined) {
+			const route = matchRoute(url, urlLength, inert, endIndex)
 
-            if (route !== null) return route
-        }
-    }
+			if (route !== null) return route
+		}
+	}
 
-    // Check for dynamic leaf
-    if (node.params !== null) {
-        const { store, name, inert } = node.params
-        const slashIndex = url.indexOf('/', endIndex)
+	// Check for dynamic leaf
+	if (node.params !== null) {
+		const { store, name, inert } = node.params
+		const slashIndex = url.indexOf('/', endIndex)
 
-        if (slashIndex !== endIndex) {
-            // Params cannot be empty
-            if (slashIndex === -1 || slashIndex >= urlLength) {
-                if (store !== null) {
-                    // This is much faster than using a computed property
-                    const params: Record<string, string> = {}
-                    params[name] = url.substring(endIndex, urlLength)
+		if (slashIndex !== endIndex) {
+			// Params cannot be empty
+			if (slashIndex === -1 || slashIndex >= urlLength) {
+				if (store !== null) {
+					// This is much faster than using a computed property
+					const params: Record<string, string> = {}
+					params[name] = url.substring(endIndex, urlLength)
 
-                    return {
-                        store,
-                        params
-                    }
-                }
-            } else if (inert !== null) {
-                const route = matchRoute(url, urlLength, inert, slashIndex)
+					return {
+						store,
+						params
+					}
+				}
+			} else if (inert !== null) {
+				const route = matchRoute(url, urlLength, inert, slashIndex)
 
-                if (route !== null) {
-                    route.params[name] = url.substring(endIndex, slashIndex)
+				if (route !== null) {
+					route.params[name] = url.substring(endIndex, slashIndex)
 
-                    return route
-                }
-            }
-        }
-    }
+					return route
+				}
+			}
+		}
+	}
 
-    // Check for wildcard leaf
-    if (node.wildcardStore !== null)
-        return {
-            store: node.wildcardStore,
-            params: {
-                '*': url.substring(endIndex, urlLength)
-            }
-        }
+	// Check for wildcard leaf
+	if (node.wildcardStore !== null)
+		return {
+			store: node.wildcardStore,
+			params: {
+				'*': url.substring(endIndex, urlLength)
+			}
+		}
 
-    return null
+	return null
 }
 
 export default Memoirist
