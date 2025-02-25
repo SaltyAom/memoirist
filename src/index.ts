@@ -86,10 +86,7 @@ export class Memoirist<T> {
 
 		this.deferred = []
 
-		this.find = (
-			method: string,
-			url: string
-			): FindResult<T> | null => {
+		this.find = (method: string, url: string): FindResult<T> | null => {
 			const root = this.root[method]
 			if (!root) return null
 
@@ -150,17 +147,11 @@ export class Memoirist<T> {
 			return store
 		}
 
-		if (optionalParams) path = path.replaceAll('?', '')
-
 		if (this.history.find(([m, p, s]) => m === method && p === path))
 			return store
 
-		if (
-			isWildcard ||
-			(optionalParams && path.charCodeAt(path.length - 1) === 63)
-		)
-			// Slice off trailing '*'
-			path = path.slice(0, -1)
+		// Slice off trailing '*'
+		if (isWildcard) path = path.slice(0, -1)
 
 		if (!ignoreHistory) this.history.push([method, path, store])
 
