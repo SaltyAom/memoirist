@@ -67,7 +67,7 @@ export class Memoirist<T> {
 	private static regex = {
 		static: /:.+?(?=\/|$)/,
 		params: /:.+?(?=\/|$)/g,
-		optionalParams: /:.+?\?(?=\/|$)/g
+		optionalParams: /(\/:\w+\?)/g
 	}
 
 	private lazyFind = (method: string, url: string) => {
@@ -138,7 +138,7 @@ export class Memoirist<T> {
 			})
 
 			for (let i = 0; i < optionalParams.length; i++) {
-				let newPath = path.replace('/' + optionalParams[i], '')
+				let newPath = path.replace(optionalParams[i], '')
 
 				this.add(method, newPath, store, {
 					ignoreError: true,

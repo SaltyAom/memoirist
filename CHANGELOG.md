@@ -1,3 +1,7 @@
+# 0.3.1 - 3 Jun 2025
+fix:
+[elysia#1234](https://github.com/elysiajs/elysia/issues/1234) handle optional path parameters after required
+
 # 0.3.0 - 9 Jan 2024
 feature:
 - lazy evaluation
