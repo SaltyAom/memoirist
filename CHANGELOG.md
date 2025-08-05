@@ -1,3 +1,7 @@
+# 0.4.0 - 6 Aug 2025
+feature:
+- add onParam
+
 # 0.3.1 - 3 Jun 2025
 fix:
 [elysia#1234](https://github.com/elysiajs/elysia/issues/1234) handle optional path parameters after required

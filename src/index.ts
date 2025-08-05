@@ -43,6 +43,10 @@ const createParamNode = <T>(name: string): ParamNode<T> => ({
 	inert: null
 })
 
+type MaybeArray<T> = T | T[]
+
+type ProcessParam = (value: string, key: string) => unknown
+
 export interface Config {
 	/**
 	 * lazily create nodes
@@ -51,6 +55,10 @@ export interface Config {
 	 * @since 0.3.0
 	 */
 	lazy?: boolean
+	/**
+	 * process dynamic parameter
+	 */
+	onParam?: MaybeArray<ProcessParam>
 }
 
 export class Memoirist<T> {
@@ -62,6 +70,11 @@ export class Memoirist<T> {
 		if (config.lazy)
 			// @ts-expect-error
 			this.find = this.lazyFind
+
+		if (config.onParam && !Array.isArray(config.onParam))
+			this.config.onParam = [
+				this.config.onParam as (param: string) => unknown
+			]
 	}
 
 	private static regex = {
@@ -86,14 +99,17 @@ export class Memoirist<T> {
 
 		this.deferred = []
 
-		this.find = (
-			method: string,
-			url: string
-			): FindResult<T> | null => {
+		this.find = (method: string, url: string): FindResult<T> | null => {
 			const root = this.root[method]
 			if (!root) return null
 
-			return matchRoute(url, url.length, root, 0)
+			return matchRoute(
+				url,
+				url.length,
+				root,
+				0,
+				this.config.onParam as ProcessParam[]
+			)
 		}
 	}
 
@@ -296,7 +312,13 @@ export class Memoirist<T> {
 		const root = this.root[method]
 		if (!root) return null
 
-		return matchRoute(url, url.length, root, 0)
+		return matchRoute(
+			url,
+			url.length,
+			root,
+			0,
+			this.config.onParam as ProcessParam[]
+		)
 	}
 }
 
@@ -304,7 +326,8 @@ const matchRoute = <T>(
 	url: string,
 	urlLength: number,
 	node: Node<T>,
-	startIndex: number
+	startIndex: number,
+	onParam?: ProcessParam[]
 ): FindResult<T> | null => {
 	const part = node.part
 	const length = part.length
@@ -344,7 +367,7 @@ const matchRoute = <T>(
 		const inert = node.inert[url.charCodeAt(endIndex)]
 
 		if (inert !== undefined) {
-			const route = matchRoute(url, urlLength, inert, endIndex)
+			const route = matchRoute(url, urlLength, inert, endIndex, onParam)
 
 			if (route !== null) return route
 		}
@@ -362,6 +385,11 @@ const matchRoute = <T>(
 					// This is much faster than using a computed property
 					const params: Record<string, string> = {}
 					params[name] = url.substring(endIndex, urlLength)
+					if (onParam)
+						for (let i = 0; i < onParam.length; i++) {
+							let temp = onParam[i](params[name], name)
+							if (temp !== undefined) params[name] = temp as any
+						}
 
 					return {
 						store,
@@ -369,10 +397,22 @@ const matchRoute = <T>(
 					}
 				}
 			} else if (inert !== null) {
-				const route = matchRoute(url, urlLength, inert, slashIndex)
+				const route = matchRoute(
+					url,
+					urlLength,
+					inert,
+					slashIndex,
+					onParam
+				)
 
 				if (route !== null) {
 					route.params[name] = url.substring(endIndex, slashIndex)
+					if (onParam)
+						for (let i = 0; i < onParam.length; i++) {
+							let temp = onParam[i](route.params[name], name)
+							if (temp !== undefined)
+								route.params[name] = temp as any
+						}
 
 					return route
 				}
