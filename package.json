@@ -21,12 +21,12 @@
 		"memoirist",
 		"router"
 	],
-	"homepage": "https://github.com/saltyaom/memoirist",
+	"homepage": "https://github.com/SaltyAom/memoirist",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/saltyaom/memoirist"
+		"url": "https://github.com/SaltyAom/memoirist"
 	},
-	"bugs": "https://github.com/saltyaom/memoirist/issues",
+	"bugs": "https://github.com/SaltyAom/memoirist/issues",
 	"license": "MIT",
 	"scripts": {
 		"dev": "bun run --watch example/index.ts",
