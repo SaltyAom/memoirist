@@ -1,8 +1,9 @@
 import { Memoirist } from '../src'
+import { LazyMemoirist } from '../src/lazy'
 
 import { describe, expect, it } from 'bun:test'
 
-const router = new Memoirist({ lazy: true })
+const router = new LazyMemoirist()
 router.add('GET', '/abc', '/abc')
 router.add('GET', '/id/:id/book', 'book')
 router.add('GET', '/id/:id/bowl', 'bowl')

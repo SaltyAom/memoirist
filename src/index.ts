@@ -1,24 +1,23 @@
-export interface FindResult<T> {
-	store: T
-	params: Record<string, any>
-}
+import type {
+	FindResult,
+	MaybeArray,
+	Node,
+	ParamNode,
+	ProcessParam
+} from './type'
 
-export interface ParamNode<T> {
-	name: string
-	store: T | null
-	inert: Node<T> | null
-}
+export type {
+	FindResult,
+	MaybeArray,
+	Node,
+	ParamNode,
+	ProcessParam
+} from './type'
 
-export interface Node<T> {
-	part: string
-	store: T | null
-	inert: Record<number, Node<T>> | null
-	params: ParamNode<T> | null
-	wildcardStore: T | null
-}
-
-const createNode = <T>(part: string, inert?: Node<T>[]): Node<T> => {
-	const inertMap: Record<number, Node<T>> | null = inert?.length ? {} : null
+function createNode<T>(part: string, inert?: Node<T>[]): Node<T> {
+	const inertMap: Record<number, Node<T>> | null = inert?.length
+		? Object.create(null)
+		: null
 
 	if (inertMap)
 		for (const child of inert!) inertMap[child.part.charCodeAt(0)] = child
@@ -26,55 +25,84 @@ const createNode = <T>(part: string, inert?: Node<T>[]): Node<T> => {
 	return {
 		part,
 		store: null,
+		storeNames: null,
 		inert: inertMap,
 		params: null,
-		wildcardStore: null
+		wildcardStore: null,
+		wildcardStoreNames: null
 	}
 }
 
-const cloneNode = <T>(node: Node<T>, part: string) => ({
-	...node,
-	part
-})
-
-const createParamNode = <T>(name: string): ParamNode<T> => ({
-	name,
-	store: null,
-	inert: null
-})
-
-type MaybeArray<T> = T | T[]
-
-type ProcessParam = (value: string, key: string) => unknown
-
-export interface Config {
-	/**
-	 * lazily create nodes
-	 *
-	 * @default undefined
-	 * @since 0.3.0
-	 */
-	lazy?: boolean
-	/**
-	 * process dynamic parameter
-	 */
-	onParam?: MaybeArray<ProcessParam>
+function cloneNode<T>(node: Node<T>, part: string): Node<T> {
+	return {
+		...node,
+		part
+	}
 }
 
+function createParamNode<T>(): ParamNode<T> {
+	return {
+		store: null,
+		storeNames: null,
+		inert: null
+	}
+}
+
+function composeOnParam(fns: ProcessParam[]): ProcessParam {
+	return function (value, key) {
+		let current: unknown = value
+		let mutated = false
+
+		for (let i = 0; i < fns.length; i++) {
+			const result = fns[i](current as string, key)
+			if (result !== undefined) {
+				current = result
+				mutated = true
+			}
+		}
+
+		return mutated ? current : undefined
+	}
+}
+
+function buildParams(
+	names: string[],
+	captures: string[],
+	onParam?: ProcessParam
+): Record<string, string> {
+	const params: Record<string, string> = Object.create(null)
+
+	for (let i = 0; i < names.length; i++) {
+		const name = names[i]
+		let value = captures[i]
+
+		if (onParam) {
+			const temp = onParam(value, name)
+			if (temp !== undefined) value = temp as string
+		}
+
+		params[name] = value
+	}
+
+	return params
+}
+
+// Reused by every find() call. matchRoute is synchronous and balances every
+// push with a pop before returning, so length is always 0 on entry/exit.
+const scratch: string[] = []
+
 export class Memoirist<T> {
-	root: Record<string, Node<T>> = {}
+	root: Record<string, Node<T>> = Object.create(null)
 	history: [string, string, T][] = []
-	deferred: [string, string, T][] = []
+	onParam?: ProcessParam
 
-	constructor(public config: Config = {}) {
-		if (config.lazy)
-			// @ts-expect-error
-			this.find = this.lazyFind
-
-		if (config.onParam && !Array.isArray(config.onParam))
-			this.config.onParam = [
-				this.config.onParam as (param: string) => unknown
-			]
+	constructor(onParam?: MaybeArray<ProcessParam>) {
+		if (onParam)
+			this.onParam = Array.isArray(onParam)
+				? onParam.length === 1
+					? onParam[0]
+					: composeOnParam(onParam)
+				: onParam
 	}
 
 	private static regex = {
@@ -83,62 +111,13 @@ export class Memoirist<T> {
 		optionalParams: /(\/:\w+\?)/g
 	}
 
-	private lazyFind = (method: string, url: string) => {
-		if (!this.config.lazy) return this.find
-
-		this.build()
-
-		return this.find(method, url)
-	}
-
-	build() {
-		if (!this.config.lazy) return
-
-		for (const [method, path, store] of this.deferred)
-			this.add(method, path, store, { lazy: false, ignoreHistory: true })
-
-		this.deferred = []
-
-		this.find = (method: string, url: string): FindResult<T> | null => {
-			const root = this.root[method]
-			if (!root) return null
-
-			return matchRoute(
-				url,
-				url.length,
-				root,
-				0,
-				this.config.onParam as ProcessParam[]
-			)
-		}
-	}
-
 	add(
 		method: string,
 		path: string,
 		store: T,
-		{
-			ignoreError = false,
-			ignoreHistory = false,
-			lazy = this.config.lazy
-		}: {
-			ignoreError?: boolean
-			ignoreHistory?: boolean
-			lazy?: boolean
-		} = {}
+		keepHistory?: boolean
 	): FindResult<T>['store'] {
-		if (lazy) {
-			// @ts-expect-error
-			this.find = this.lazyFind
-			this.deferred.push([method, path, store])
-
-			return store
-		}
-
-		if (typeof path !== 'string')
-			throw new TypeError('Route path must be a string')
-
-		if (path === '') path = '/'
+		if (!path) path = '/'
 		else if (path[0] !== '/') path = `/${path}`
 
 		const isWildcard = path[path.length - 1] === '*'
@@ -147,20 +126,12 @@ export class Memoirist<T> {
 
 		if (optionalParams) {
 			const originalPath = path.replaceAll('?', '')
-			this.add(method, originalPath, store, {
-				ignoreError,
-				ignoreHistory,
-				lazy
-			})
+			this.add(method, originalPath, store, keepHistory)
 
 			for (let i = 0; i < optionalParams.length; i++) {
 				let newPath = path.replace(optionalParams[i], '')
 
-				this.add(method, newPath, store, {
-					ignoreError: true,
-					ignoreHistory,
-					lazy
-				})
+				this.add(method, newPath, store, keepHistory)
 			}
 
 			return store
@@ -168,7 +139,11 @@ export class Memoirist<T> {
 
 		if (optionalParams) path = path.replaceAll('?', '')
 
-		if (this.history.find(([m, p, s]) => m === method && p === path))
+		if (
+			this.history.find(function ([m, p]) {
+				return m === method && p === path
+			})
+		)
 			return store
 
 		if (
@@ -178,7 +153,7 @@ export class Memoirist<T> {
 			// Slice off trailing '*'
 			path = path.slice(0, -1)
 
-		if (!ignoreHistory) this.history.push([method, path, store])
+		if (keepHistory !== false) this.history.push([method, path, store])
 
 		const inertParts = path.split(Memoirist.regex.static)
 		const paramParts = path.match(Memoirist.regex.params) || []
@@ -191,6 +166,7 @@ export class Memoirist<T> {
 		else node = this.root[method]
 
 		let paramPartsIndex = 0
+		const paramNames: string[] = []
 
 		for (let i = 0; i < inertParts.length; ++i) {
 			let part = inertParts[i]
@@ -198,17 +174,9 @@ export class Memoirist<T> {
 			if (i > 0) {
 				// Set param on the node
 				const param = paramParts[paramPartsIndex++].slice(1)
+				paramNames.push(param)
 
-				if (node.params === null) node.params = createParamNode(param)
-				else if (node.params.name !== param) {
-					if (ignoreError) return store
-					else
-						throw new Error(
-							`Cannot create route "${path}" with parameter "${param}" ` +
-								'because a route already exists with a different parameter name ' +
-								`("${node.params.name}") in the same location`
-						)
-				}
+				if (node.params === null) node.params = createParamNode()
 
 				const params = node.params
 
@@ -232,9 +200,9 @@ export class Memoirist<T> {
 
 				if (j === node.part.length) {
 					// Add static child
-					if (node.inert === null) node.inert = {}
+					if (node.inert === null) node.inert = Object.create(null)
 
-					const inert = node.inert[part.charCodeAt(j)]
+					const inert = node.inert![part.charCodeAt(j)]
 
 					if (inert) {
 						// Re-run loop with existing static node
@@ -246,7 +214,7 @@ export class Memoirist<T> {
 
 					// Create new node
 					const childNode = createNode<T>(part.slice(j))
-					node.inert[part.charCodeAt(j)] = childNode
+					node.inert![part.charCodeAt(j)] = childNode
 					node = childNode
 
 					break
@@ -276,34 +244,36 @@ export class Memoirist<T> {
 
 		if (paramPartsIndex < paramParts.length) {
 			// The final part is a parameter
-			const param = paramParts[paramPartsIndex]
-			const name = param.slice(1)
+			const name = paramParts[paramPartsIndex].slice(1)
+			paramNames.push(name)
 
-			if (node.params === null) node.params = createParamNode(name)
-			else if (node.params.name !== name) {
-				if (ignoreError) return store
-				else
-					throw new Error(
-						`Cannot create route "${path}" with parameter "${name}" ` +
-							'because a route already exists with a different parameter name ' +
-							`("${node.params.name}") in the same location`
-					)
+			if (node.params === null) node.params = createParamNode()
+
+			if (node.params.store === null) {
+				node.params.store = store
+				node.params.storeNames = paramNames
 			}
-
-			if (node.params.store === null) node.params.store = store
 
 			return node.params.store!
 		}
 
 		if (isWildcard) {
 			// The final part is a wildcard
-			if (node.wildcardStore === null) node.wildcardStore = store
+			paramNames.push('*')
+
+			if (node.wildcardStore === null) {
+				node.wildcardStore = store
+				node.wildcardStoreNames = paramNames
+			}
 
 			return node.wildcardStore!
 		}
 
 		// The final part is static
-		if (node.store === null) node.store = store
+		if (node.store === null) {
+			node.store = store
+			node.storeNames = paramNames
+		}
 
 		return node.store!
 	}
@@ -312,23 +282,18 @@ export class Memoirist<T> {
 		const root = this.root[method]
 		if (!root) return null
 
-		return matchRoute(
-			url,
-			url.length,
-			root,
-			0,
-			this.config.onParam as ProcessParam[]
-		)
+		return matchRoute(url, url.length, root, 0, this.onParam, scratch)
 	}
 }
 
-const matchRoute = <T>(
+function matchRoute<T>(
 	url: string,
 	urlLength: number,
 	node: Node<T>,
 	startIndex: number,
-	onParam?: ProcessParam[]
-): FindResult<T> | null => {
+	onParam: ProcessParam | undefined,
+	captures: string[]
+): FindResult<T> | null {
 	const part = node.part
 	const length = part.length
 	const endIndex = startIndex + length
@@ -347,17 +312,31 @@ const matchRoute = <T>(
 
 	// Reached the end of the URL
 	if (endIndex === urlLength) {
-		if (node.store !== null)
+		if (node.store !== null) {
+			const names = node.storeNames!
 			return {
 				store: node.store,
-				params: {}
+				params:
+					names.length === 0
+						? Object.create(null)
+						: buildParams(names, captures, onParam)
 			}
+		}
 
-		if (node.wildcardStore !== null)
+		if (node.wildcardStore !== null) {
+			captures.push('')
+			const params = buildParams(
+				node.wildcardStoreNames!,
+				captures,
+				onParam
+			)
+			captures.pop()
+
 			return {
 				store: node.wildcardStore,
-				params: { '*': '' }
+				params
 			}
+		}
 
 		return null
 	}
@@ -367,7 +346,14 @@ const matchRoute = <T>(
 		const inert = node.inert[url.charCodeAt(endIndex)]
 
 		if (inert !== undefined) {
-			const route = matchRoute(url, urlLength, inert, endIndex, onParam)
+			const route = matchRoute(
+				url,
+				urlLength,
+				inert,
+				endIndex,
+				onParam,
+				captures
+			)
 
 			if (route !== null) return route
 		}
@@ -375,21 +361,16 @@ const matchRoute = <T>(
 
 	// Check for dynamic leaf
 	if (node.params !== null) {
-		const { store, name, inert } = node.params
+		const { store, storeNames, inert } = node.params
 		const slashIndex = url.indexOf('/', endIndex)
 
 		if (slashIndex !== endIndex) {
 			// Params cannot be empty
 			if (slashIndex === -1 || slashIndex >= urlLength) {
 				if (store !== null) {
-					// This is much faster than using a computed property
-					const params: Record<string, string> = {}
-					params[name] = url.substring(endIndex, urlLength)
-					if (onParam)
-						for (let i = 0; i < onParam.length; i++) {
-							let temp = onParam[i](params[name], name)
-							if (temp !== undefined) params[name] = temp as any
-						}
+					captures.push(url.substring(endIndex, urlLength))
+					const params = buildParams(storeNames!, captures, onParam)
+					captures.pop()
 
 					return {
 						store,
@@ -397,37 +378,33 @@ const matchRoute = <T>(
 					}
 				}
 			} else if (inert !== null) {
+				captures.push(url.substring(endIndex, slashIndex))
 				const route = matchRoute(
 					url,
 					urlLength,
 					inert,
 					slashIndex,
-					onParam
+					onParam,
+					captures
 				)
+				captures.pop()
 
-				if (route !== null) {
-					route.params[name] = url.substring(endIndex, slashIndex)
-					if (onParam)
-						for (let i = 0; i < onParam.length; i++) {
-							let temp = onParam[i](route.params[name], name)
-							if (temp !== undefined)
-								route.params[name] = temp as any
-						}
-
-					return route
-				}
+				if (route !== null) return route
 			}
 		}
 	}
 
 	// Check for wildcard leaf
-	if (node.wildcardStore !== null)
+	if (node.wildcardStore !== null) {
+		captures.push(url.substring(endIndex, urlLength))
+		const params = buildParams(node.wildcardStoreNames!, captures, onParam)
+		captures.pop()
+
 		return {
 			store: node.wildcardStore,
-			params: {
-				'*': url.substring(endIndex, urlLength)
-			}
+			params
 		}
+	}
 
 	return null
 }

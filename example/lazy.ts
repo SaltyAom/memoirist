@@ -1,4 +1,4 @@
-import { Memoirist } from '../src'
+import { LazyMemoirist as Memoirist } from '../src/lazy'
 
 const router = new Memoirist()
 

@@ -4,9 +4,7 @@ import { describe, expect, it } from 'bun:test'
 
 describe('onParam', () => {
 	it('handle single onParam', () => {
-		const router = new Memoirist({
-			onParam: () => 'kon kon'
-		})
+		const router = new Memoirist(() => 'kon kon')
 
 		router.add('GET', '/name/:name/id/:id', 'fox')
 
@@ -20,9 +18,7 @@ describe('onParam', () => {
 	})
 
 	it('handle multiple onParam', () => {
-		const router = new Memoirist({
-			onParam: [() => 'kon kon', (value) => value + '!']
-		})
+		const router = new Memoirist([() => 'kon kon', (value) => value + '!'])
 
 		router.add('GET', '/name/:name/id/:id', 'fox')
 
@@ -36,9 +32,7 @@ describe('onParam', () => {
 	})
 
 	it('handle continue on undefined', () => {
-		const router = new Memoirist({
-			onParam: [() => {}, (value) => value + '!']
-		})
+		const router = new Memoirist([() => {}, (value) => value + '!'])
 
 		router.add('GET', '/name/:name/id/:id', 'fox')
 
@@ -52,10 +46,8 @@ describe('onParam', () => {
 	})
 
 	it('handle by key', () => {
-		const router = new Memoirist({
-			onParam(value, key) {
-				if (key === 'name') return 'fbk!'
-			}
+		const router = new Memoirist((_value, key) => {
+			if (key === 'name') return 'fbk!'
 		})
 
 		router.add('GET', '/name/:name/id/:id', 'fox')

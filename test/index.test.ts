@@ -353,4 +353,26 @@ describe('Memoirist', () => {
 			}
 		})
 	})
+
+	it('preserve distinct param names per route at shared prefix', () => {
+		const router = new Memoirist()
+
+		router.add('GET', '/name/:name', 'first')
+		router.add('GET', '/name/:id/:name', 'second')
+
+		expect(router.find('GET', '/name/1')).toEqual({
+			store: 'first',
+			params: {
+				name: '1'
+			}
+		})
+
+		expect(router.find('GET', '/name/1/2')).toEqual({
+			store: 'second',
+			params: {
+				id: '1',
+				name: '2'
+			}
+		})
+	})
 })
