@@ -91,6 +91,12 @@ function buildParams(
 // push with a pop before returning, so length is always 0 on entry/exit.
 const scratch: string[] = []
 
+const pattern = {
+	static: /:.+?(?=\/|$)/,
+	params: /:.+?(?=\/|$)/g,
+	optionalParams: /(\/:\w+\?)/g
+} as const
+
 export class Memoirist<T> {
 	root: Record<string, Node<T>> = Object.create(null)
 	history: [string, string, T][] = []
@@ -105,12 +111,6 @@ export class Memoirist<T> {
 				: onParam
 	}
 
-	private static regex = {
-		static: /:.+?(?=\/|$)/,
-		params: /:.+?(?=\/|$)/g,
-		optionalParams: /(\/:\w+\?)/g
-	}
-
 	add(
 		method: string,
 		path: string,
@@ -122,7 +122,7 @@ export class Memoirist<T> {
 
 		const isWildcard = path[path.length - 1] === '*'
 		// End with ? and is param
-		const optionalParams = path.match(Memoirist.regex.optionalParams)
+		const optionalParams = path.match(pattern.optionalParams)
 
 		if (optionalParams) {
 			const originalPath = path.replaceAll('?', '')
@@ -155,8 +155,8 @@ export class Memoirist<T> {
 
 		if (keepHistory !== false) this.history.push([method, path, store])
 
-		const inertParts = path.split(Memoirist.regex.static)
-		const paramParts = path.match(Memoirist.regex.params) || []
+		const inertParts = path.split(pattern.static)
+		const paramParts = path.match(pattern.params) || []
 
 		if (inertParts[inertParts.length - 1] === '') inertParts.pop()
 

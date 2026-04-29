@@ -1,6 +1,6 @@
 {
 	"name": "memoirist",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Elysia's Radix Tree router for fast matching dynamic parameters",
 	"author": {
 		"name": "saltyAom",
@@ -10,19 +10,19 @@
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.mts",
-			"require": "./dist/cjs/index.cjs",
-			"import": "./dist/index.mjs"
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/cjs/index.js"
 		},
 		"./lazy": {
-			"types": "./dist/lazy.d.mts",
-			"require": "./dist/cjs/lazy.cjs",
-			"import": "./dist/lazy.mjs"
+			"types": "./dist/lazy.d.ts",
+			"import": "./dist/lazy.mjs",
+			"require": "./dist/cjs/lazy.js"
 		},
 		"./type": {
-			"types": "./dist/type.d.mts",
-			"require": "./dist/cjs/type.cjs",
-			"import": "./dist/type.mjs"
+			"types": "./dist/type.d.ts",
+			"import": "./dist/type.mjs",
+			"require": "./dist/cjs/type.js"
 		}
 	},
 	"keywords": [

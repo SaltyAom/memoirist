@@ -1,3 +1,7 @@
+# 1.0.1 - 29 Apr 2026
+fix:
+- use `.d.ts` instead of `.d.mts` for type exports
+
 # 1.0.0 - 29 Apr 2026
 breaking:
 - remove `Config` wrapper; constructor now takes `onParam` directly: `new Memoirist(fn)` instead of `new Memoirist({ onParam: fn })`
