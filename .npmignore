@@ -23,3 +23,6 @@ test
 CHANGELOG.md
 benchmarks
 build.ts
+.github
+bunfig.toml
+src
