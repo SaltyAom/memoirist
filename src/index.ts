@@ -300,15 +300,13 @@ function matchRoute<T>(
 
 	// Only check the pathPart if its length is > 1 since the parent has
 	// already checked that the url matches the first character
-	if (length > 1) {
-		if (endIndex > urlLength) return null
-
-		// Using a loop is faster for short strings
-		if (length < 15) {
-			for (let i = 1, j = startIndex + 1; i < length; ++i, ++j)
-				if (part.charCodeAt(i) !== url.charCodeAt(j)) return null
-		} else if (url.slice(startIndex, endIndex) !== part) return null
-	}
+	if (
+		length > 1 &&
+		(
+			endIndex > urlLength ||
+			!url.startsWith(part, startIndex)
+		)
+	) return null
 
 	// Reached the end of the URL
 	if (endIndex === urlLength) {
