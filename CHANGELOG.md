@@ -1,3 +1,7 @@
+# 1.0.2 - 6 May 2026
+fix:
+- cjs import path
+
 # 1.0.1 - 29 Apr 2026
 fix:
 - use `.d.ts` instead of `.d.mts` for type exports
