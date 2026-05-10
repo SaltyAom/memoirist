@@ -354,6 +354,53 @@ describe('Memoirist', () => {
 		})
 	})
 
+	it('binds single trailing optional', () => {
+		const router = new Memoirist()
+		router.add('GET', '/x/:a?', 'store')
+
+		expect(router.find('GET', '/x')?.params).toEqual({})
+		expect(router.find('GET', '/x/foo')?.params).toEqual({ a: 'foo' })
+	})
+
+	it('LEFT-fills two trailing optionals', () => {
+		const router = new Memoirist()
+		router.add('GET', '/y/:a?/:b?', 'store')
+
+		expect(router.find('GET', '/y')?.params).toEqual({})
+		expect(router.find('GET', '/y/foo')?.params).toEqual({ a: 'foo' })
+		expect(router.find('GET', '/y/foo/bar')?.params).toEqual({
+			a: 'foo',
+			b: 'bar'
+		})
+	})
+
+	it('LEFT-fills three trailing optionals', () => {
+		const router = new Memoirist()
+		router.add('GET', '/z/:a?/:b?/:c?', 'store')
+
+		expect(router.find('GET', '/z/x')?.params).toEqual({ a: 'x' })
+		expect(router.find('GET', '/z/x/y')?.params).toEqual({
+			a: 'x',
+			b: 'y'
+		})
+		expect(router.find('GET', '/z/x/y/w')?.params).toEqual({
+			a: 'x',
+			b: 'y',
+			c: 'w'
+		})
+	})
+
+	it('mixes required + trailing optional', () => {
+		const router = new Memoirist()
+		router.add('GET', '/u/:id/:slug?', 'store')
+
+		expect(router.find('GET', '/u/123')?.params).toEqual({ id: '123' })
+		expect(router.find('GET', '/u/123/hello')?.params).toEqual({
+			id: '123',
+			slug: 'hello'
+		})
+	})
+
 	it('preserve distinct param names per route at shared prefix', () => {
 		const router = new Memoirist()
 

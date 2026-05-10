@@ -125,19 +125,48 @@ export class Memoirist<T> {
 		const optionalParams = path.match(pattern.optionalParams)
 
 		if (optionalParams) {
-			const originalPath = path.replaceAll('?', '')
-			this.add(method, originalPath, store, keepHistory)
+			const segments = path.slice(1).split('/')
+			const isOptional = (s: string) =>
+				s.length > 1 &&
+				s.charCodeAt(0) === 58 /* ':' */ &&
+				s.charCodeAt(s.length - 1) === 63 /* '?' */
 
-			for (let i = 0; i < optionalParams.length; i++) {
-				let newPath = path.replace(optionalParams[i], '')
+			let tailStart = segments.length
+			while (tailStart > 0 && isOptional(segments[tailStart - 1]))
+				tailStart--
 
+			let midIdx = -1
+			for (let i = 0; i < tailStart; i++)
+				if (isOptional(segments[i])) {
+					midIdx = i
+					break
+				}
+
+			if (midIdx !== -1) {
+				const without = segments.slice()
+				without.splice(midIdx, 1)
+				this.add(method, '/' + without.join('/'), store, keepHistory)
+
+				const kept = segments.slice()
+				kept[midIdx] = kept[midIdx].slice(0, -1)
+				this.add(method, '/' + kept.join('/'), store, keepHistory)
+				return store
+			}
+
+			const head = segments.slice(0, tailStart)
+			const fullTail = segments
+				.slice(tailStart)
+				.map((s) => s.slice(0, -1))
+
+			for (let k = 0; k <= fullTail.length; k++) {
+				const parts = head.concat(fullTail.slice(0, k))
+				const newPath =
+					parts.length === 0 ? '/' : '/' + parts.join('/')
 				this.add(method, newPath, store, keepHistory)
 			}
 
 			return store
 		}
-
-		if (optionalParams) path = path.replaceAll('?', '')
 
 		if (
 			this.history.find(function ([m, p]) {
@@ -146,10 +175,7 @@ export class Memoirist<T> {
 		)
 			return store
 
-		if (
-			isWildcard ||
-			(optionalParams && path.charCodeAt(path.length - 1) === 63)
-		)
+		if (isWildcard)
 			// Slice off trailing '*'
 			path = path.slice(0, -1)
 

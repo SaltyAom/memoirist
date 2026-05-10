@@ -1,3 +1,7 @@
+# 1.0.3 - 10 May 2026
+fix:
+- LEFT-fill trailing optional params: `/name/:last?/:first?` matched against `/name/x` now binds `{ last: 'x' }` instead of `{ first: 'x' }`, matching Express / Fastify / Hono / react-router
+
 # 1.0.2 - 6 May 2026
 fix:
 - cjs import path
