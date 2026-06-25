@@ -1,12 +1,12 @@
 import { Memoirist } from './index'
-import type { FindResult, MaybeArray, ProcessParam } from './type'
+import type { FindResult, MemoiristOptions } from './type'
 
 export class LazyMemoirist<T> extends Memoirist<T> {
 	deferred: [string, string, T][] = []
 	private built = false
 
-	constructor(onParam?: MaybeArray<ProcessParam>) {
-		super(onParam)
+	constructor(options?: MemoiristOptions) {
+		super(options)
 		this.find = this.lazyFind
 	}
 

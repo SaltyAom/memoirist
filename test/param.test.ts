@@ -4,7 +4,7 @@ import { describe, expect, it } from 'bun:test'
 
 describe('onParam', () => {
 	it('handle single onParam', () => {
-		const router = new Memoirist(() => 'kon kon')
+		const router = new Memoirist({ onParam: () => 'kon kon' })
 
 		router.add('GET', '/name/:name/id/:id', 'fox')
 
@@ -18,7 +18,9 @@ describe('onParam', () => {
 	})
 
 	it('handle multiple onParam', () => {
-		const router = new Memoirist([() => 'kon kon', (value) => value + '!'])
+		const router = new Memoirist({
+			onParam: [() => 'kon kon', (value) => value + '!']
+		})
 
 		router.add('GET', '/name/:name/id/:id', 'fox')
 
@@ -32,7 +34,9 @@ describe('onParam', () => {
 	})
 
 	it('handle continue on undefined', () => {
-		const router = new Memoirist([() => {}, (value) => value + '!'])
+		const router = new Memoirist({
+			onParam: [() => {}, (value) => value + '!']
+		})
 
 		router.add('GET', '/name/:name/id/:id', 'fox')
 
@@ -46,8 +50,10 @@ describe('onParam', () => {
 	})
 
 	it('handle by key', () => {
-		const router = new Memoirist((_value, key) => {
-			if (key === 'name') return 'fbk!'
+		const router = new Memoirist({
+			onParam: (_value, key) => {
+				if (key === 'name') return 'fbk!'
+			}
 		})
 
 		router.add('GET', '/name/:name/id/:id', 'fox')
@@ -59,5 +65,19 @@ describe('onParam', () => {
 				id: '123'
 			}
 		})
+	})
+
+	it('decode keeps a literal space, not %20', () => {
+		const router = new Memoirist({ onParam: (value) => decodeURIComponent(value) })
+
+		router.add('GET', '/:name', 'ok')
+
+		// `/hello world` decodes to `hello world`, never `hello%20world`
+		expect(router.find('GET', '/hello world')?.params.name).toBe(
+			'hello world'
+		)
+		expect(router.find('GET', '/hello%20world')?.params.name).toBe(
+			'hello world'
+		)
 	})
 })

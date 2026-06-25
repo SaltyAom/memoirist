@@ -1,6 +1,6 @@
 import type {
 	FindResult,
-	MaybeArray,
+	MemoiristOptions,
 	Node,
 	ParamNode,
 	ProcessParam
@@ -9,6 +9,7 @@ import type {
 export type {
 	FindResult,
 	MaybeArray,
+	MemoiristOptions,
 	Node,
 	ParamNode,
 	ProcessParam
@@ -101,8 +102,12 @@ export class Memoirist<T> {
 	root: Record<string, Node<T>> = Object.create(null)
 	history: [string, string, T][] = []
 	onParam?: ProcessParam
+	loosePath = false
 
-	constructor(onParam?: MaybeArray<ProcessParam>) {
+	constructor(options?: MemoiristOptions) {
+		if (options?.loosePath) this.loosePath = true
+
+		const onParam = options?.onParam
 		if (onParam)
 			this.onParam = Array.isArray(onParam)
 				? onParam.length === 1
@@ -160,8 +165,7 @@ export class Memoirist<T> {
 
 			for (let k = 0; k <= fullTail.length; k++) {
 				const parts = head.concat(fullTail.slice(0, k))
-				const newPath =
-					parts.length === 0 ? '/' : '/' + parts.join('/')
+				const newPath = parts.length === 0 ? '/' : '/' + parts.join('/')
 				this.add(method, newPath, store, keepHistory)
 			}
 
@@ -308,7 +312,22 @@ export class Memoirist<T> {
 		const root = this.root[method]
 		if (!root) return null
 
-		return matchRoute(url, url.length, root, 0, this.onParam, scratch)
+		const found = matchRoute(
+			url,
+			url.length,
+			root,
+			0,
+			this.onParam,
+			scratch
+		)
+		if (found || !this.loosePath || url.length <= 1) return found
+
+		const loose =
+			url.charCodeAt(url.length - 1) === 47
+				? url.slice(0, -1)
+				: url + '/'
+
+		return matchRoute(loose, loose.length, root, 0, this.onParam, scratch)
 	}
 }
 

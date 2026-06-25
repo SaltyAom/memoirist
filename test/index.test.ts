@@ -401,6 +401,35 @@ describe('Memoirist', () => {
 		})
 	})
 
+	it('loosePath matches trailing slash on lookup miss', () => {
+		const router = new Memoirist({ loosePath: true })
+
+		router.add('GET', '/users', 'static')
+		router.add('GET', '/id/:id', 'param')
+
+		// registered without trailing slash, requested with one
+		expect(router.find('GET', '/users/')?.store).toBe('static')
+		expect(router.find('GET', '/id/1/')).toEqual({
+			store: 'param',
+			params: { id: '1' }
+		})
+
+		// registered with trailing slash, requested without
+		router.add('GET', '/posts/', 'slashed')
+		expect(router.find('GET', '/posts')?.store).toBe('slashed')
+
+		// exact match still wins, root is untouched
+		expect(router.find('GET', '/users')?.store).toBe('static')
+		expect(router.find('GET', '/')).toBe(null)
+	})
+
+	it('loosePath off does not match trailing slash', () => {
+		const router = new Memoirist()
+		router.add('GET', '/users', 'static')
+
+		expect(router.find('GET', '/users/')).toBe(null)
+	})
+
 	it('preserve distinct param names per route at shared prefix', () => {
 		const router = new Memoirist()
 

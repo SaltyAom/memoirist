@@ -1,3 +1,10 @@
+# 1.1.0 - 25 Jun 2026
+breaking:
+- constructor now takes an options object instead of a bare `onParam`: `new Memoirist({ onParam })` instead of `new Memoirist(onParam)`
+
+feature:
+- `loosePath`: opt-in trailing-slash matching. With `new Memoirist({ loosePath: true })`, a lookup miss retries once with the trailing slash toggled (`/users/` → `/users` and vice-versa) instead of registering both variants eagerly. Off by default; the hot path is unchanged.
+
 # 1.0.3 - 10 May 2026
 fix:
 - LEFT-fill trailing optional params: `/name/:last?/:first?` matched against `/name/x` now binds `{ last: 'x' }` instead of `{ first: 'x' }`, matching Express / Fastify / Hono / react-router

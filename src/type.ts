@@ -22,3 +22,14 @@ export interface Node<T> {
 export type MaybeArray<T> = T | T[]
 
 export type ProcessParam = (value: string, key: string) => unknown
+
+export interface MemoiristOptions {
+	/** Param decode / transform hook, run per matched param */
+	onParam?: MaybeArray<ProcessParam>
+
+	/**
+	 * Match a path ignoring a trailing slash on lookup miss instead of
+	 * registering both `/path` and `/path/` variants eagerly. Opt-in.
+	 */
+	loosePath?: boolean
+}
