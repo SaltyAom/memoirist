@@ -1,4 +1,7 @@
 # 1.2.0 - 13 Jul 2026
+breaking:
+- remove the write-only `history` collection and internal fourth `add` argument
+
 behavior:
 - registration route is now last-win
 

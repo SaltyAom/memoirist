@@ -42,7 +42,7 @@
 		"test": "bun test",
 		"build": "bun build.ts",
 		"benchmark": "bun benchmarks/index.ts",
-		"benchmark:memoirist": "bun benchmarks/libs/memoirist.ts",
+		"benchmark:memoirist": "bun benchmarks/find.bench.ts",
 		"bench:find": "bun benchmarks/find.bench.ts",
 		"release": "npm run build && npm run test && npm publish --access public"
 	},
@@ -53,7 +53,7 @@
 		"@types/trouter": "^3.1.4",
 		"express": "^4.22.1",
 		"find-my-way": "^7.7.0",
-		"hono": "^4.12.15",
+		"hono": "^4.12.29",
 		"koa-tree-router": "^0.13.1",
 		"mitata": "^1.0.34",
 		"radix3": "^1.1.2",

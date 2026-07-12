@@ -1,7 +1,4 @@
-import { $ } from 'bun'
 import { build } from 'tsdown'
-
-await $`rm -rf dist`
 
 await build({
 	outDir: 'dist',
@@ -18,8 +15,3 @@ await build({
 		}
 	}
 })
-
-// await $`cp dist/cjs/index*.d.ts dist/bun`
-// await $`cp dist/cjs/index*.d.ts dist`
-
-process.exit()

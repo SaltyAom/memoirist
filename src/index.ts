@@ -100,7 +100,6 @@ const pattern = {
 
 export class Memoirist<T> {
 	root: Record<string, Node<T>> = Object.create(null)
-	history: [string, string, T][] = []
 	onParam?: ProcessParam
 	loosePath = false
 
@@ -119,8 +118,7 @@ export class Memoirist<T> {
 	add(
 		method: string,
 		path: string,
-		store: T,
-		keepHistory?: boolean
+		store: T
 	): FindResult<T>['store'] {
 		if (!path) path = '/'
 		else if (path[0] !== '/') path = `/${path}`
@@ -150,11 +148,11 @@ export class Memoirist<T> {
 			if (midIdx !== -1) {
 				const without = segments.slice()
 				without.splice(midIdx, 1)
-				this.add(method, '/' + without.join('/'), store, keepHistory)
+				this.add(method, '/' + without.join('/'), store)
 
 				const kept = segments.slice()
 				kept[midIdx] = kept[midIdx].slice(0, -1)
-				this.add(method, '/' + kept.join('/'), store, keepHistory)
+				this.add(method, '/' + kept.join('/'), store)
 				return store
 			}
 
@@ -166,7 +164,7 @@ export class Memoirist<T> {
 			for (let k = 0; k <= fullTail.length; k++) {
 				const parts = head.concat(fullTail.slice(0, k))
 				const newPath = parts.length === 0 ? '/' : '/' + parts.join('/')
-				this.add(method, newPath, store, keepHistory)
+				this.add(method, newPath, store)
 			}
 
 			return store
@@ -175,8 +173,6 @@ export class Memoirist<T> {
 		if (isWildcard)
 			// Slice off trailing '*'
 			path = path.slice(0, -1)
-
-		if (keepHistory !== false) this.history.push([method, path, store])
 
 		const inertParts = path.split(pattern.static)
 		const paramParts = path.match(pattern.params) || []

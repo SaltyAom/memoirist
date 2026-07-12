@@ -3,7 +3,6 @@ import type { FindResult, MemoiristOptions } from './type'
 
 export class LazyMemoirist<T> extends Memoirist<T> {
 	deferred: [string, string, T][] = []
-	private built = false
 
 	constructor(options?: MemoiristOptions) {
 		super(options)
@@ -11,7 +10,6 @@ export class LazyMemoirist<T> extends Memoirist<T> {
 	}
 
 	add(method: string, path: string, store: T): FindResult<T>['store'] {
-		this.built = false
 		this.deferred.push([method, path, store])
 		this.find = this.lazyFind
 
@@ -19,13 +17,10 @@ export class LazyMemoirist<T> extends Memoirist<T> {
 	}
 
 	build(): void {
-		if (this.built) return
-
 		for (const [method, path, store] of this.deferred)
-			super.add(method, path, store, false)
+			super.add(method, path, store)
 
 		this.deferred = []
-		this.built = true
 		this.find = Memoirist.prototype.find
 	}
 
