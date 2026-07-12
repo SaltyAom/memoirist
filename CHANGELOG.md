@@ -1,3 +1,7 @@
+# 1.2.0 - 13 Jul 2026
+behavior:
+- registration route is now last-win
+
 # 1.1.0 - 25 Jun 2026
 breaking:
 - constructor now takes an options object instead of a bare `onParam`: `new Memoirist({ onParam })` instead of `new Memoirist(onParam)`

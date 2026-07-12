@@ -172,13 +172,6 @@ export class Memoirist<T> {
 			return store
 		}
 
-		if (
-			this.history.find(function ([m, p]) {
-				return m === method && p === path
-			})
-		)
-			return store
-
 		if (isWildcard)
 			// Slice off trailing '*'
 			path = path.slice(0, -1)
@@ -279,10 +272,8 @@ export class Memoirist<T> {
 
 			if (node.params === null) node.params = createParamNode()
 
-			if (node.params.store === null) {
-				node.params.store = store
-				node.params.storeNames = paramNames
-			}
+			node.params.store = store
+			node.params.storeNames = paramNames
 
 			return node.params.store!
 		}
@@ -291,19 +282,15 @@ export class Memoirist<T> {
 			// The final part is a wildcard
 			paramNames.push('*')
 
-			if (node.wildcardStore === null) {
-				node.wildcardStore = store
-				node.wildcardStoreNames = paramNames
-			}
+			node.wildcardStore = store
+			node.wildcardStoreNames = paramNames
 
 			return node.wildcardStore!
 		}
 
 		// The final part is static
-		if (node.store === null) {
-			node.store = store
-			node.storeNames = paramNames
-		}
+		node.store = store
+		node.storeNames = paramNames
 
 		return node.store!
 	}

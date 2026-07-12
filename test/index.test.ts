@@ -451,4 +451,22 @@ describe('Memoirist', () => {
 			}
 		})
 	})
+
+	it('prefers the last registered duplicate route', () => {
+		const router = new Memoirist()
+
+		router.add('GET', '/static', 'first')
+		router.add('GET', '/static', 'last')
+		router.add('GET', '/param/:first', 'first')
+		router.add('GET', '/param/:last', 'last')
+		router.add('GET', '/wildcard/*', 'first')
+		router.add('GET', '/wildcard/*', 'last')
+
+		expect(router.find('GET', '/static')?.store).toBe('last')
+		expect(router.find('GET', '/param/value')).toEqual({
+			store: 'last',
+			params: { last: 'value' }
+		})
+		expect(router.find('GET', '/wildcard/value')?.store).toBe('last')
+	})
 })

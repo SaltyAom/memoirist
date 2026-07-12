@@ -333,4 +333,16 @@ describe('Lazy Memoirist', () => {
             )
         })
     })
+
+	it('prefers the last registered duplicate route', () => {
+		const router = new LazyMemoirist()
+
+		router.add('GET', '/route/:first', 'first')
+		router.add('GET', '/route/:last', 'last')
+
+		expect(router.find('GET', '/route/value')).toEqual({
+			store: 'last',
+			params: { last: 'value' }
+		})
+	})
 })
