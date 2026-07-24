@@ -6,12 +6,19 @@ export interface FindResult<T> {
 export interface ParamNode<T> {
 	store: T | null
 	storeNames: string[] | null
+	/** Route names a param `__proto__`, so its params need a null prototype */
+	nullProto: boolean
 	inert: Node<T> | null
 }
 
 export interface Node<T> {
 	part: string
+	/** Static store whose route captured no params — returned without a branch */
 	store: T | null
+	/** Static store whose route captured params (needs storeNames) */
+	paramStore: T | null
+	/** Route names a param `__proto__`, so its params need a null prototype */
+	nullProto: boolean
 	storeNames: string[] | null
 	inert: Record<number, Node<T>> | null
 	params: ParamNode<T> | null

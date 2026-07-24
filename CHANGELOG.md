@@ -1,3 +1,16 @@
+# 1.2.1 - 25 Jul 2026
+behavior:
+- param keys are inserted deepest-first: `Object.keys` on `/:a/:b/:c` now returns `c, b, a` instead of `a, b, c`. Values and lookups are unchanged; only enumeration order differs
+
+improvement:
+- `find` is 4–24% faster than 1.2.0
+- params are written while the match unwinds instead of being collected into a shared scratch array and rebuilt at the leaf, removing the push/pop round-trip and the rebuild loop
+- param-carrying static routes moved to a separate `paramStore` slot so the no-param static return stays a branch-free literal, any condition between the store check and the returned object costs ~8ns per `find` on JSC, which is what made every route, params or not, slower in 1.2.0
+
+internal:
+- remove `buildParams` and the module-level scratch array
+- `Node` gains a `paramStore` field; `storeNames` is now set only for param-carrying static routes
+
 # 1.2.0 - 13 Jul 2026
 breaking:
 - remove the write-only `history` collection and internal fourth `add` argument

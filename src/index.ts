@@ -26,6 +26,8 @@ function createNode<T>(part: string, inert?: Node<T>[]): Node<T> {
 	return {
 		part,
 		store: null,
+		nullProto: false,
+		paramStore: null,
 		storeNames: null,
 		inert: inertMap,
 		params: null,
@@ -45,6 +47,7 @@ function createParamNode<T>(): ParamNode<T> {
 	return {
 		store: null,
 		storeNames: null,
+		nullProto: false,
 		inert: null
 	}
 }
@@ -66,31 +69,49 @@ function composeOnParam(fns: ProcessParam[]): ProcessParam {
 	}
 }
 
-function buildParams(
-	names: string[],
-	captures: string[],
-	onParam?: ProcessParam
-): Record<string, string> {
-	const params: Record<string, string> = Object.create(null)
-
-	for (let i = 0; i < names.length; i++) {
-		const name = names[i]
-		let value = captures[i]
-
-		if (onParam) {
-			const temp = onParam(value, name)
-			if (temp !== undefined) value = temp as string
-		}
-
-		params[name] = value
+/** Wildcard leaf: '*' is the deepest capture, any params above fill while unwinding */
+function wildcardLeaf<T>(
+	node: Node<T>,
+	value: string,
+	onParam: ProcessParam | undefined
+): FindResult<T> {
+	const names = node.wildcardStoreNames!
+	if (names.length > 1) {
+		matchedNames = names
+		matchedIndex = names.length - 2
 	}
+
+	return {
+		store: node.wildcardStore!,
+		params: seedParams('*', value, onParam, node.nullProto)
+	}
+}
+
+/** `params['__proto__'] = value` is a silent no-op on a plain object */
+function needsNullProto(names: string[]) {
+	return names.indexOf('__proto__') !== -1
+}
+
+function seedParams(
+	name: string,
+	value: unknown,
+	onParam: ProcessParam | undefined,
+	nullProto: boolean
+) {
+	// Plain object unless the route names a param `__proto__`, where the write
+	// would be a silent no-op. Null-proto costs nothing on JSC but makes `for…in`
+	// over the result ~12x slower on V8, which is what consumers pay
+	const params: Record<string, any> = nullProto ? Object.create(null) : {}
+	params[name] = onParam ? applyParam(value, name, onParam) : value
 
 	return params
 }
 
-// Reused by every find() call. matchRoute is synchronous and balances every
-// push with a pop before returning, so length is always 0 on entry/exit.
-const scratch: string[] = []
+const applyParam = (value: unknown, name: string, onParam: ProcessParam) =>
+	onParam(value as string, name) ?? value
+
+let matchedNames: string[] = []
+let matchedIndex = 0
 
 const pattern = {
 	static: /:.+?(?=\/|$)/,
@@ -115,11 +136,7 @@ export class Memoirist<T> {
 				: onParam
 	}
 
-	add(
-		method: string,
-		path: string,
-		store: T
-	): FindResult<T>['store'] {
+	add(method: string, path: string, store: T): FindResult<T>['store'] {
 		if (!path) path = '/'
 		else if (path[0] !== '/') path = `/${path}`
 
@@ -270,6 +287,7 @@ export class Memoirist<T> {
 
 			node.params.store = store
 			node.params.storeNames = paramNames
+			node.params.nullProto = needsNullProto(paramNames)
 
 			return node.params.store!
 		}
@@ -280,37 +298,33 @@ export class Memoirist<T> {
 
 			node.wildcardStore = store
 			node.wildcardStoreNames = paramNames
+			node.nullProto = needsNullProto(paramNames)
 
 			return node.wildcardStore!
 		}
 
 		// The final part is static
-		node.store = store
-		node.storeNames = paramNames
+		if (paramNames.length === 0) node.store = store
+		else {
+			node.paramStore = store
+			node.storeNames = paramNames
+			node.nullProto = needsNullProto(paramNames)
+		}
 
-		return node.store!
+		return store
 	}
 
 	find(method: string, url: string): FindResult<T> | null {
 		const root = this.root[method]
 		if (!root) return null
 
-		const found = matchRoute(
-			url,
-			url.length,
-			root,
-			0,
-			this.onParam,
-			scratch
-		)
+		const found = matchRoute(url, url.length, root, 0, this.onParam)
 		if (found || !this.loosePath || url.length <= 1) return found
 
 		const loose =
-			url.charCodeAt(url.length - 1) === 47
-				? url.slice(0, -1)
-				: url + '/'
+			url.charCodeAt(url.length - 1) === 47 ? url.slice(0, -1) : url + '/'
 
-		return matchRoute(loose, loose.length, root, 0, this.onParam, scratch)
+		return matchRoute(loose, loose.length, root, 0, this.onParam)
 	}
 }
 
@@ -319,15 +333,12 @@ function matchRoute<T>(
 	urlLength: number,
 	node: Node<T>,
 	startIndex: number,
-	onParam: ProcessParam | undefined,
-	captures: string[]
+	onParam: ProcessParam | undefined
 ): FindResult<T> | null {
 	const part = node.part
 	const length = part.length
 	const endIndex = startIndex + length
 
-	// Only check the pathPart if its length is > 1 since the parent has
-	// already checked that the url matches the first character
 	if (length > 1) {
 		if (endIndex > urlLength) return null
 
@@ -340,31 +351,22 @@ function matchRoute<T>(
 
 	// Reached the end of the URL
 	if (endIndex === urlLength) {
-		if (node.store !== null) {
+		// No params can be written into this one, so a plain literal is safe
+		if (node.store !== null) return { store: node.store, params: {} }
+
+		if (node.paramStore !== null) {
+			// Every name is filled by an unwinding frame above
 			const names = node.storeNames!
+			matchedNames = names
+			matchedIndex = names.length - 1
+
 			return {
-				store: node.store,
-				params:
-					names.length === 0
-						? Object.create(null)
-						: buildParams(names, captures, onParam)
+				store: node.paramStore,
+				params: node.nullProto ? Object.create(null) : {}
 			}
 		}
 
-		if (node.wildcardStore !== null) {
-			captures.push('')
-			const params = buildParams(
-				node.wildcardStoreNames!,
-				captures,
-				onParam
-			)
-			captures.pop()
-
-			return {
-				store: node.wildcardStore,
-				params
-			}
-		}
+		if (node.wildcardStore !== null) return wildcardLeaf(node, '', onParam)
 
 		return null
 	}
@@ -374,14 +376,7 @@ function matchRoute<T>(
 		const inert = node.inert[url.charCodeAt(endIndex)]
 
 		if (inert !== undefined) {
-			const route = matchRoute(
-				url,
-				urlLength,
-				inert,
-				endIndex,
-				onParam,
-				captures
-			)
+			const route = matchRoute(url, urlLength, inert, endIndex, onParam)
 
 			if (route !== null) return route
 		}
@@ -396,43 +391,50 @@ function matchRoute<T>(
 			// Params cannot be empty
 			if (slashIndex === -1 || slashIndex >= urlLength) {
 				if (store !== null) {
-					captures.push(url.substring(endIndex, urlLength))
-					const params = buildParams(storeNames!, captures, onParam)
-					captures.pop()
+					const names = storeNames!
+					const last = names.length - 1
+
+					if (last > 0) {
+						matchedNames = names
+						matchedIndex = last - 1
+					}
 
 					return {
 						store,
-						params
+						params: seedParams(
+							names[last],
+							url.substring(endIndex, urlLength),
+							onParam,
+							node.params!.nullProto
+						)
 					}
 				}
 			} else if (inert !== null) {
-				captures.push(url.substring(endIndex, slashIndex))
 				const route = matchRoute(
 					url,
 					urlLength,
 					inert,
 					slashIndex,
-					onParam,
-					captures
+					onParam
 				)
-				captures.pop()
 
-				if (route !== null) return route
+				if (route !== null) {
+					const name = matchedNames[matchedIndex--]
+					const value: unknown = url.substring(endIndex, slashIndex)
+
+					route.params[name] = onParam
+						? applyParam(value, name, onParam)
+						: value
+
+					return route
+				}
 			}
 		}
 	}
 
 	// Check for wildcard leaf
-	if (node.wildcardStore !== null) {
-		captures.push(url.substring(endIndex, urlLength))
-		const params = buildParams(node.wildcardStoreNames!, captures, onParam)
-		captures.pop()
-
-		return {
-			store: node.wildcardStore,
-			params
-		}
-	}
+	if (node.wildcardStore !== null)
+		return wildcardLeaf(node, url.substring(endIndex, urlLength), onParam)
 
 	return null
 }
