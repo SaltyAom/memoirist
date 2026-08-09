@@ -36,6 +36,21 @@ function createNode<T>(part: string, inert?: Node<T>[]): Node<T> {
 	}
 }
 
+function resetNode<T>(node: Node<T>, part: string, inert: Node<T>[]): void {
+	const inertMap: Record<number, Node<T>> = Object.create(null)
+	for (const child of inert) inertMap[child.part.charCodeAt(0)] = child
+
+	node.part = part
+	node.store = null
+	node.nullProto = false
+	node.paramStore = null
+	node.storeNames = null
+	node.inert = inertMap
+	node.params = null
+	node.wildcardStore = null
+	node.wildcardStoreNames = null
+}
+
 function cloneNode<T>(node: Node<T>, part: string): Node<T> {
 	return {
 		...node,
@@ -69,7 +84,6 @@ function composeOnParam(fns: ProcessParam[]): ProcessParam {
 	}
 }
 
-/** Wildcard leaf: '*' is the deepest capture, any params above fill while unwinding */
 function wildcardLeaf<T>(
 	node: Node<T>,
 	value: string,
@@ -87,10 +101,7 @@ function wildcardLeaf<T>(
 	}
 }
 
-/** `params['__proto__'] = value` is a silent no-op on a plain object */
-function needsNullProto(names: string[]) {
-	return names.indexOf('__proto__') !== -1
-}
+const needsNullProto = (names: string[]) => names.indexOf('__proto__') !== -1
 
 function seedParams(
 	name: string,
@@ -113,11 +124,51 @@ const applyParam = (value: unknown, name: string, onParam: ProcessParam) =>
 let matchedNames: string[] = []
 let matchedIndex = 0
 
-const pattern = {
-	static: /:.+?(?=\/|$)/,
-	params: /:.+?(?=\/|$)/g,
-	optionalParams: /(\/:\w+\?)/g
-} as const
+const optionalParamsRegex = /(\/:\w+\?)/g
+
+function splitPath(path: string): [string[], string[]] {
+	const inertParts: string[] = []
+	const paramParts: string[] = []
+
+	// `start` opens the current inert part, `from` is where to look for the next
+	// ':' — they diverge when a ':' turns out not to begin a param
+	let start = 0
+	let from = 0
+
+	for (;;) {
+		const colon = path.indexOf(':', from)
+
+		if (colon === -1) {
+			inertParts.push(path.slice(start))
+			break
+		}
+
+		// `.+?` needs at least one character, so the closing '/' is at colon + 2
+		let end = path.indexOf('/', colon + 2)
+		if (end === -1) end = path.length
+
+		if (end - colon < 2) {
+			// A trailing ':' with nothing to capture
+			from = colon + 1
+			continue
+		}
+
+		const token = path.slice(colon, end)
+
+		if (token.indexOf('\n') !== -1) {
+			from = colon + 1
+			continue
+		}
+
+		inertParts.push(path.slice(start, colon))
+		paramParts.push(token)
+
+		start = end
+		from = end
+	}
+
+	return [inertParts, paramParts]
+}
 
 export class Memoirist<T> {
 	root: Record<string, Node<T>> = Object.create(null)
@@ -141,8 +192,10 @@ export class Memoirist<T> {
 		else if (path[0] !== '/') path = `/${path}`
 
 		const isWildcard = path[path.length - 1] === '*'
-		// End with ? and is param
-		const optionalParams = path.match(pattern.optionalParams)
+		const optionalParams =
+			path.indexOf('?') !== -1
+				? path.match(optionalParamsRegex)
+				: null
 
 		if (optionalParams) {
 			const segments = path.slice(1).split('/')
@@ -191,8 +244,7 @@ export class Memoirist<T> {
 			// Slice off trailing '*'
 			path = path.slice(0, -1)
 
-		const inertParts = path.split(pattern.static)
-		const paramParts = path.match(pattern.params) || []
+		const [inertParts, paramParts] = splitPath(path)
 
 		if (inertParts[inertParts.length - 1] === '') inertParts.pop()
 
@@ -229,7 +281,7 @@ export class Memoirist<T> {
 					if (j < node.part.length) {
 						// Move the current node down
 						const childNode = cloneNode(node, node.part.slice(j))
-						Object.assign(node, createNode(part, [childNode]))
+						resetNode(node, part, [childNode])
 					}
 					break
 				}
@@ -261,13 +313,10 @@ export class Memoirist<T> {
 					const existingChild = cloneNode(node, node.part.slice(j))
 					const newChild = createNode<T>(part.slice(j))
 
-					Object.assign(
-						node,
-						createNode(node.part.slice(0, j), [
-							existingChild,
-							newChild
-						])
-					)
+					resetNode(node, node.part.slice(0, j), [
+						existingChild,
+						newChild
+					])
 
 					node = newChild
 

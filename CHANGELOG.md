@@ -1,3 +1,7 @@
+# 1.2.2 - 10 Aug 2026
+improvement:
+- general optimization
+
 # 1.2.1 - 25 Jul 2026
 behavior:
 - param keys are inserted deepest-first: `Object.keys` on `/:a/:b/:c` now returns `c, b, a` instead of `a, b, c`. Values and lookups are unchanged; only enumeration order differs
