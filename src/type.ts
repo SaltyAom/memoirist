@@ -20,7 +20,9 @@ export interface Node<T> {
 	/** Route names a param `__proto__`, so its params need a null prototype */
 	nullProto: boolean
 	storeNames: string[] | null
-	inert: Record<number, Node<T>> | null
+	/** By `charCode - inertMin`: char-code object keys cost JSC ~1.6 KB/node */
+	inert: Node<T>[] | null
+	inertMin: number
 	params: ParamNode<T> | null
 	wildcardStore: T | null
 	wildcardStoreNames: string[] | null

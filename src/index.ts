@@ -15,37 +15,72 @@ export type {
 	ProcessParam
 } from './type'
 
+function setInert<T>(node: Node<T>, code: number, child: Node<T>): void {
+	const inert = node.inert
+
+	if (inert === null) {
+		node.inert = [child]
+		node.inertMin = code
+
+		return
+	}
+
+	const min = node.inertMin
+
+	if (code < min) {
+		// Re-base so the lowest code stays at index 0
+		const shift = min - code
+		const rebased: Node<T>[] = new Array(inert.length + shift)
+
+		for (let i = 0; i < inert.length; i++)
+			if (inert[i] !== undefined) rebased[i + shift] = inert[i]
+
+		rebased[0] = child
+		node.inert = rebased
+		node.inertMin = code
+
+		return
+	}
+
+	inert[code - min] = child
+}
+
+function getInert<T>(node: Node<T>, code: number): Node<T> | undefined {
+	const index = code - node.inertMin
+
+	return index >= 0 ? node.inert![index] : undefined
+}
+
 function createNode<T>(part: string, inert?: Node<T>[]): Node<T> {
-	const inertMap: Record<number, Node<T>> | null = inert?.length
-		? Object.create(null)
-		: null
-
-	if (inertMap)
-		for (const child of inert!) inertMap[child.part.charCodeAt(0)] = child
-
-	return {
+	const node: Node<T> = {
 		part,
 		store: null,
 		nullProto: false,
 		paramStore: null,
 		storeNames: null,
-		inert: inertMap,
+		inert: null,
+		inertMin: 0,
 		params: null,
 		wildcardStore: null,
 		wildcardStoreNames: null
 	}
+
+	if (inert)
+		for (const child of inert)
+			setInert(node, child.part.charCodeAt(0), child)
+
+	return node
 }
 
 function resetNode<T>(node: Node<T>, part: string, inert: Node<T>[]): void {
-	const inertMap: Record<number, Node<T>> = Object.create(null)
-	for (const child of inert) inertMap[child.part.charCodeAt(0)] = child
-
 	node.part = part
 	node.store = null
 	node.nullProto = false
 	node.paramStore = null
 	node.storeNames = null
-	node.inert = inertMap
+	node.inert = null
+	node.inertMin = 0
+	for (const child of inert) setInert(node, child.part.charCodeAt(0), child)
 	node.params = null
 	node.wildcardStore = null
 	node.wildcardStoreNames = null
@@ -288,9 +323,10 @@ export class Memoirist<T> {
 
 				if (j === node.part.length) {
 					// Add static child
-					if (node.inert === null) node.inert = Object.create(null)
-
-					const inert = node.inert![part.charCodeAt(j)]
+					const inert =
+						node.inert === null
+							? undefined
+							: getInert(node, part.charCodeAt(j))
 
 					if (inert) {
 						// Re-run loop with existing static node
@@ -302,7 +338,7 @@ export class Memoirist<T> {
 
 					// Create new node
 					const childNode = createNode<T>(part.slice(j))
-					node.inert![part.charCodeAt(j)] = childNode
+					setInert(node, part.charCodeAt(j), childNode)
 					node = childNode
 
 					break
@@ -422,7 +458,7 @@ function matchRoute<T>(
 
 	// Check for a static leaf
 	if (node.inert !== null) {
-		const inert = node.inert[url.charCodeAt(endIndex)]
+		const inert = getInert(node, url.charCodeAt(endIndex))
 
 		if (inert !== undefined) {
 			const route = matchRoute(url, urlLength, inert, endIndex, onParam)
