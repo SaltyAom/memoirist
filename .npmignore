@@ -25,4 +25,4 @@ benchmarks
 build.ts
 .github
 bunfig.toml
-src
+.claude

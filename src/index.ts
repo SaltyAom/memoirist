@@ -15,7 +15,9 @@ export type {
 	ProcessParam
 } from './type'
 
-function setInert<T>(node: Node<T>, code: number, child: Node<T>): void {
+// Every `| 0` keeps it provably int32 under `bun compile`
+// Without it, it's typed as double and AOT `find` is ~1.5x slower
+function setInert<T>(node: Node<T>, code: number, child: Node<T>) {
 	const inert = node.inert
 
 	if (inert === null) {
@@ -29,7 +31,7 @@ function setInert<T>(node: Node<T>, code: number, child: Node<T>): void {
 
 	if (code < min) {
 		// Re-base so the lowest code stays at index 0
-		const shift = min - code
+		const shift = (min - code) | 0
 		const rebased: Node<T>[] = new Array(inert.length + shift)
 
 		for (let i = 0; i < inert.length; i++)
@@ -46,7 +48,7 @@ function setInert<T>(node: Node<T>, code: number, child: Node<T>): void {
 }
 
 function getInert<T>(node: Node<T>, code: number): Node<T> | undefined {
-	const index = code - node.inertMin
+	const index = (code - node.inertMin) | 0
 
 	return index >= 0 ? node.inert![index] : undefined
 }
@@ -67,7 +69,7 @@ function createNode<T>(part: string, inert?: Node<T>[]): Node<T> {
 
 	if (inert)
 		for (const child of inert)
-			setInert(node, child.part.charCodeAt(0), child)
+			setInert(node, child.part.charCodeAt(0) | 0, child)
 
 	return node
 }
@@ -80,7 +82,10 @@ function resetNode<T>(node: Node<T>, part: string, inert: Node<T>[]): void {
 	node.storeNames = null
 	node.inert = null
 	node.inertMin = 0
-	for (const child of inert) setInert(node, child.part.charCodeAt(0), child)
+
+	for (const child of inert)
+		setInert(node, child.part.charCodeAt(0) | 0, child)
+
 	node.params = null
 	node.wildcardStore = null
 	node.wildcardStoreNames = null
@@ -144,9 +149,7 @@ function seedParams(
 	onParam: ProcessParam | undefined,
 	nullProto: boolean
 ) {
-	// Plain object unless the route names a param `__proto__`, where the write
-	// would be a silent no-op. Null-proto costs nothing on JSC but makes `for…in`
-	// over the result ~12x slower on V8, which is what consumers pay
+	// Plain object unless the route names a param `__proto__`
 	const params: Record<string, any> = nullProto ? Object.create(null) : {}
 	params[name] = onParam ? applyParam(value, name, onParam) : value
 
@@ -326,7 +329,7 @@ export class Memoirist<T> {
 					const inert =
 						node.inert === null
 							? undefined
-							: getInert(node, part.charCodeAt(j))
+							: getInert(node, part.charCodeAt(j) | 0)
 
 					if (inert) {
 						// Re-run loop with existing static node
@@ -338,7 +341,7 @@ export class Memoirist<T> {
 
 					// Create new node
 					const childNode = createNode<T>(part.slice(j))
-					setInert(node, part.charCodeAt(j), childNode)
+					setInert(node, part.charCodeAt(j) | 0, childNode)
 					node = childNode
 
 					break
@@ -422,7 +425,7 @@ function matchRoute<T>(
 ): FindResult<T> | null {
 	const part = node.part
 	const length = part.length
-	const endIndex = startIndex + length
+	const endIndex = (startIndex + length) | 0
 
 	if (length > 1) {
 		if (endIndex > urlLength) return null
@@ -458,7 +461,7 @@ function matchRoute<T>(
 
 	// Check for a static leaf
 	if (node.inert !== null) {
-		const inert = getInert(node, url.charCodeAt(endIndex))
+		const inert = getInert(node, url.charCodeAt(endIndex) | 0)
 
 		if (inert !== undefined) {
 			const route = matchRoute(url, urlLength, inert, endIndex, onParam)
@@ -470,7 +473,7 @@ function matchRoute<T>(
 	// Check for dynamic leaf
 	if (node.params !== null) {
 		const { store, storeNames, inert } = node.params
-		const slashIndex = url.indexOf('/', endIndex)
+		const slashIndex = url.indexOf('/', endIndex) | 0
 
 		if (slashIndex !== endIndex) {
 			// Params cannot be empty
